@@ -1,2 +1,3 @@
 # organization
-Job profile of 2060 team
+
+Some organization guidelines for 2060.io development team.
