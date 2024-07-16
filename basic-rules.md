@@ -1,19 +1,22 @@
 ## Git organization
 
-### Project naming
+### Project creation
 
-Projects are named using kebab-case
+A new project is always created as a result of particular needs. Therefore, there should be some form of input specifications for it. 
 
-Naming:
+In order to create a project, a proposal Pull Request to this project with a proposal must be created. In the proposal, basic information about the project will be provided (TODO: proposal template).
 
-[module]
+Once the Pull Request (which should follow the rules that will be explained below) is approved, the project will be added to the organization. 
 
-Each project has its own `specs`.
 
-Prefixes:
+#### Naming 
 
-[topic]-[submodule]
-dashboard-
+Projects are named using kebab-case.
+
+
+#### Maintainers
+
+Projects belong usually to a [team](https://github.com/orgs/2060-io/teams). As a general rule, all team members have write access to them. However, not every member is a maintainer. During the project proposal phase, at least a maintainer should be assigned.
 
 
 ### Branches
@@ -26,15 +29,36 @@ Every commit to main branch is supposed to contain an unstable but usable state,
 
 Besides main branch, we have two other branch types:
 
-- Feature branches: usually created from main, these short-lived branches are meant to handle a new feature or fix that will be integrated into the origin branch. They are deleted as soon as this happens
-- Maintenance branches: created when a new feature or fix must be integrated into a previously released line (e.g. 1.x when we are already working on 2.x). There is no need to create maintenance branch for every release, but only for those where a fix or feature is already scheduled. Later on, it can be reused for further minor releases if there is a need to do so
+- **Feature branches**: usually created from main, these short-lived branches are meant to handle a new feature or fix that will be integrated into the origin branch. They are deleted as soon as this happens
+- **Maintenance branches**: created when a new feature or fix must be integrated into a previously released line (e.g. 1.x when we are already working on 2.x). There is no need to create maintenance branch for every release, but only for those where a fix or feature is already scheduled. Later on, it can be reused for further minor releases if there is a need to do so
 
+### Commit rules
+
+In long-lived branches, commits follow [conventional commit](https://www.conventionalcommits.org/en/v1.0.0/) rules. In particular, we use [Angular convention](https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#-commit-message-guidelines) for the type definition and subject, body and footer writing guidelines.
+
+It is not mandatory to follow these rules in feature branches. However, we encourage to use it, as in some cases it is useful: for instance, if we want to cherry-pick some commits from a PR that is closed prior to being merged.
+
+#### Commit signature
+
+When commiting, you should always use your real name and GitHub associated e-mail address (set them in `user.name` and `user.email` git config settings). This is 
+
+Since we are usually contributing to Linux Foundation and other open source projects that require [Developer Certificace of Origin](https://developercertificate.org/), we encourage to sign-off every commit 
+
+> Note: To add DCO signature, simply add the `-s` option to git commit command or use `Commit Staged (Signed off)` in VS Code's Commit options).
 
 ### Pull Request rules
 
-The only way to commit into main branch is through a Pull Request that must be approved by another member of the team with right permissions.
+The only way to commit into main branch is through a Pull Request (PR) that must be approved by another member of the team with right permissions.
 
-Pull Requests (PR) must be named after their main purpose using semantic commit rules (e.g. 'feat: a new feature' or 'fix: an important bugfix'). When merging a Pull Request, all commits should be squashed into a single one whose message will be the same as PR's name. 
+Unless the introduced change is too obvious or it is detailed somewhere else, it is important in the description to briefly summarize the concepts/reasons behind the PR and, in case of new features, architecture details to facilitate the review. Screenshots and videos usually help.
+
+PRs can be related to issues, although it is not mandatory (neither desirable) to create an issue in the project in order to create a PR. Either in PR description (by using the clause `Fixes #<issue reference>` or `Closes #<issue reference>)` or PR's `Development` field.
+
+Try to keep PRs as small and focused as possible: we want PRs to be expedite and feature branches to be closed sooner than later, in order to avoid merge conflicts and to provide clear details about the changes introduced in the main branch.
+
+PRs must be named after their main purpose using the aforementioned commit rules (e.g. 'feat: a new feature' or 'fix: an important bugfix'). When merging a Pull Request, all commits should be squashed into a single one whose message will be the same as PR's name, so it is good to have the good naming from the start. 
+
+Once the PR is merged, the feature branch should be deleted.
 
 ### Release strategy
 
@@ -57,7 +81,7 @@ These rules have particular meaning once the project has reached an initial 'off
 
 Whenever new features are developed, feature branches from current state of `main` branch are created. These branches are meant to be short-lived and deleted as soon as they get merged into `main`. Naming for such branches follow the pattern `feat/description-of-the-feature`. It is encouraged to prefix the description with the number of the issue that originates it (if any).
 
-Same considerations as before apply also for fixes, whose branches follow hte pattern `fix/description-of-the-fix`. However, there are some differences on the way they are integrated into codebase, especially when a release has been already done.
+Same considerations as before apply also for fixes, whose branches follow the pattern `fix/description-of-the-fix`. However, there are some differences on the way they are integrated into codebase, especially when a release has been already done.
 
 New features are always integrated into the mainline branch (`main`) and the same happens to the fixes. In case we want to backport a fix to a previously released version, we need to create a maintenance branch for it and cherry-pick the commits there.
 
@@ -69,6 +93,8 @@ For example, suppose the release 1.0.0 has been done and we already introduced b
 - Create a new release from new `v1` state and call it `v1.0.1` or `v1.1.0`, depending on the rules stated above
 
 Note: there are some bugs that only affect previous versions (i.e. they are not present in `main` codebase). In such cases, it is fine to create the fix branch from maintenance branch (`v1` for this example).
+
+![](./assets/branch-example-1.png)
 
 ```plantuml
 @startuml
