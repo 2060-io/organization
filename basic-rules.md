@@ -4,7 +4,7 @@
 
 A new project is always created as a result of particular needs. Therefore, there should be some form of input specifications for it. 
 
-In order to create a project, a proposal Pull Request to this project with a proposal must be created. In the proposal, basic information about the project will be provided (TODO: proposal template).
+In order to create a project, a proposal Pull Request to this repo with a proposal must be created. In the proposal, basic information about the project will be provided. A PR template, specific for this procedure, will be available.
 
 Once the Pull Request (which should follow the rules that will be explained below) is approved, the project will be added to the organization. 
 
@@ -13,15 +13,13 @@ Once the Pull Request (which should follow the rules that will be explained belo
 
 Projects are named using kebab-case.
 
-
 #### Maintainers
 
 Projects belong usually to a [team](https://github.com/orgs/2060-io/teams). As a general rule, all team members have write access to them. However, not every member is a maintainer. During the project proposal phase, at least a maintainer should be assigned.
 
-
 ### Branches
 
-As a general rule, projects do have a long-lived, main branch where newest features are implemented. This branch is called _main_. 
+Projects do have a long-lived, main branch where newest features are implemented. This branch is called _main_. 
 
 This branch should be protected, in such a way that no direct commits or force pushes are allowed.
 
@@ -40,9 +38,9 @@ It is not mandatory to follow these rules in feature branches. However, we encou
 
 #### Commit signature
 
-When commiting, you should always use your real name and GitHub associated e-mail address (set them in `user.name` and `user.email` git config settings). This is 
+When commiting, you should always use your real name and GitHub associated e-mail address (set them in `user.name` and `user.email` git config settings). This is important to make sure that all your activity is properly tracked in your GitHub profile.
 
-Since we are usually contributing to Linux Foundation and other open source projects that require [Developer Certificace of Origin](https://developercertificate.org/), we encourage to sign-off every commit 
+Since we are usually contributing to Linux Foundation and other open source projects that require [Developer Certificate of Origin](https://developercertificate.org/), we encourage to sign-off every commit 
 
 > Note: To add DCO signature, simply add the `-s` option to git commit command or use `Commit Staged (Signed off)` in VS Code's Commit options).
 
