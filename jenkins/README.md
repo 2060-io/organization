@@ -32,7 +32,38 @@ You can also install the necessary plugins by uploading a `plugins.txt` file. Th
 - Navigate to **Manage Jenkins > Credentials**.
 - Add a **GitHub Personal Access Token** under the appropriate scope.
 
-### 4. Creating a New Pipeline
+### 4. Best Practices for a New Deployment Repository
+
+### Namespace Handling
+- If a new namespace is required, it is recommended to define it in the deployment files.
+- For existing namespaces, avoid including them in `deployment.yaml`.
+
+### Helm `values.yaml` Requirements
+The `values.yaml` file must contain at least the following fields:
+```yaml
+# Blue / Green Deployment
+name: example
+namespace: example
+replicas: 1
+# blue / green
+deployment:
+  color: blue
+  first: true
+```
+
+### Deployment Files Configuration
+In the deployment files, use the `if-end` clause for everything except StatefulSets or Deployments, as the Jenkins file should only create pods for Blue/Green integration:
+```yaml
+{{- if .Values.deployment.first }}
+{{- end }}
+```
+
+For more details on Blue/Green deployment strategies, refer to [Red Hat's guide](https://www.redhat.com/en/topics/devops/what-is-blue-green-deployment).
+
+### Example Project
+On [here](./example/), you can find a sample project that illustrates the expected structure for each project.
+
+### 5. Creating a New Pipeline
 If no pipeline exists, follow these steps:
 
 1. **Ensure the repository structure**:
@@ -73,10 +104,9 @@ If no pipeline exists, follow these steps:
 
 By following these steps, you ensure a consistent and efficient deployment workflow across all projects.
 
----
-For manual deployment updates, use the `Deploy Jenkins to Kubernetes` CI workflow in the repository.
+> **Note:** Once you have one pipeline created, you can copy the existing pipeline and create a new one based on it. The setup should work without any problems.
 
-### 5. (Optional & Recommended) Configure GitHub OAuth for Authentication
+### 6. (Optional & Recommended) Configure GitHub OAuth for Authentication
 #### GitHub OAuth Setup:
 1. Navigate to [GitHub Developer Settings](https://github.com/settings/developers) and create a new **OAuth App**.
 2. Use the following values:
@@ -92,7 +122,7 @@ For manual deployment updates, use the `Deploy Jenkins to Kubernetes` CI workflo
 
 With this setup, Jenkins will authenticate users via GitHub, simplifying access management and security.
 
-### 6. (Optional) Configure a GitHub Webhook
+### 7. (Optional) Configure a GitHub Webhook
 - In your GitHub repository, go to **Settings > Webhooks**.
 - Add a new webhook pointing to Jenkins (`https://jenkins.dev.2060.io/github-webhook/`).
 - Use **application/json** as the content type.
@@ -100,47 +130,9 @@ With this setup, Jenkins will authenticate users via GitHub, simplifying access 
 
 > **Note:** This is the traditional method, but it is **not recommended** for this implementation, as deployments in 2060 are managed through GitHub Actions.
 
-### 7. (Optional) Enable Kubernetes Cloud
+### 8. (Optional) Enable Kubernetes Cloud
 - Navigate to **Manage Jenkins > Clouds**.
 - Configure Kubernetes as a cloud provider to allow Jenkins to create additional pods dynamically.
 
 > **Note:** it is **not recommended** for this implementation, as deployments in 2060 are managed through a custom image.
 
-
-## How to use
-
-For deploying a new project in Kubernetes, follow these steps:
-
-1. Add the Helm deployment files in the `deployment/*` directory.
-2. Submit a Pull Request (PR) to the `dev` branch.
-3. Continuous Integration (CI) will validate compliance with required standards.
-4. Once the PR is approved, Jenkins will deploy the project.
-
-### Namespace Handling
-- If a new namespace is required, it is recommended to define it in the deployment files.
-- For existing namespaces, avoid including them in `deployment.yaml`.
-
-### Helm `values.yaml` Requirements
-The `values.yaml` file must contain at least the following fields:
-```yaml
-# Blue / Green Deployment
-name: example
-namespace: example
-replicas: 1
-# blue / green
-deployment:
-  color: blue
-  first: true
-```
-
-### Deployment Files Configuration
-In the deployment files, use the `if-end` clause for everything except StatefulSets or Deployments, as the Jenkins file should only create pods for Blue/Green integration:
-```yaml
-{{- if .Values.deployment.first }}
-{{- end }}
-```
-
-For more details on Blue/Green deployment strategies, refer to [Red Hat's guide](https://www.redhat.com/en/topics/devops/what-is-blue-green-deployment).
-
-### Example Project
-On [here](./example/), you can find a sample project that illustrates the expected structure for each project.
