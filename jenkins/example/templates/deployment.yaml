@@ -1,0 +1,51 @@
+{{- if .Values.deployment.first }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+spec:
+  selector:
+    app: {{ .Values.name }}
+    color: {{ .Values.deployment.color }}
+  ports:
+    ...
+---
+# Public ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: public-{{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ...
+{{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+   name: {{ .Values.name }}-{{ .Values.deployment.color }}
+   namespace: {{ .Values.namespace }}
+spec:
+   serviceName: {{ .Values.name }}
+   replicas: {{ .Values.replicas }}
+   selector:
+      matchLabels:
+         app: {{ .Values.name }}
+         color: {{ .Values.deployment.color }}
+   template:
+      metadata:
+         labels:
+            app: {{ .Values.name }}
+            color: {{ .Values.deployment.color }}
+      spec:
+         containers:
+          ...
+
+   volumeClaimTemplates: 
+   - metadata:
+       ...

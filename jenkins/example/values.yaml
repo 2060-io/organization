@@ -1,0 +1,7 @@
+name: example
+namespace: example
+replicas: 1
+# blue / green
+deployment:
+  color: blue
+  first: true
