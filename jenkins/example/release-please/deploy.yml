@@ -1,0 +1,83 @@
+name: Deploy Projects via Jenkins
+on:
+  push:
+    paths:
+      - 'deployments/**'
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  detect-changes:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release)') }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          path: 'deployments'
+          separator: ','
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          if [[ -z "${{ steps.changed-files.outputs.all_changed_files }}" ]]; then
+            echo "matrix={\"project\":[]}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          PROJECTS=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | \
+            tr ',' '\n' | \
+            awk -F '/' 'NF>1 {print $2}' | \
+            sort -u | \
+            jq -R . | jq -s . | tr -d '\n')
+          echo "matrix={\"project\":$PROJECTS}" >> $GITHUB_OUTPUT
+
+  release-charts:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.matrix != '{"project":[]}' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    outputs:
+      matrix: ${{ needs.detect-changes.outputs.matrix }}
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Release Charts
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Print release outputs for debugging
+        continue-on-error: true
+        run: echo ${{ toJson(steps.release.outputs) }}
+      - name: Get version from manifest
+        id: get-version
+        run: |
+          OUTPUT_JSON='${{ toJson(steps.release.outputs) }}'
+          PR_JSON=$(echo "$OUTPUT_JSON" | jq -r '.pr | fromjson')
+          TITLE=$(echo "$PR_JSON" | jq -r '.title')
+          VERSION=$(echo "$TITLE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  trigger-jenkins:
+    needs: release-charts
+    if: ${{ needs.release-charts.outputs.version != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.release-charts.outputs.matrix) }}
+    steps:
+      - name: Trigger Jenkins webhook for project
+        run: |
+          echo "Triggering Jenkins webhook for project ${{ matrix.project }} with version ${{ needs.release-charts.outputs.version }}"
+          curl -u "${{ github.actor }}:${{ secrets.OAUTH_TOKEN }}" \
+            "${{ secrets.JENKINS_URL }}/job/deployments/job/${{ matrix.project }}/buildWithParameters?token=${{ secrets.JENKINS_TOKEN }}&PROJECT=${{ matrix.project }}&VERSION=${{ needs.release-charts.outputs.version }}"

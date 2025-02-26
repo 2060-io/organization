@@ -136,3 +136,75 @@ With this setup, Jenkins will authenticate users via GitHub, simplifying access 
 
 > **Note:** it is **not recommended** for this implementation, as deployments in 2060 are managed through a custom image.
 
+### 9. (Optional & Recommended) Configure Versioning with Release Please
+
+#### GitHub Actions Versioning Setup:
+1. To manage versioning, we will use [Release Please](https://github.com/googleapis/release-please), which automates releases using conventional commits.
+2. Modify the `deploy.yaml` workflow file to include the following `release-charts` section:
+
+   ```yaml
+   release-charts:
+     needs: detect-changes
+     if: ${{ needs.detect-changes.outputs.matrix != '{"project":[]}' }}
+     runs-on: ubuntu-latest
+     strategy:
+       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+     outputs:
+       matrix: ${{ needs.detect-changes.outputs.matrix }}
+       version: ${{ steps.get-version.outputs.version }}
+     steps:
+       - name: Release Charts
+         id: release
+         uses: googleapis/release-please-action@v4
+         with:
+           config-file: release-please-config.json
+           manifest-file: .release-please-manifest.json
+           token: ${{ secrets.GITHUB_TOKEN }}
+       - name: Print release outputs for debugging
+         continue-on-error: true
+         run: echo ${{ toJson(steps.release.outputs) }}
+       - name: Get version from manifest
+         id: get-version
+         run: |
+           OUTPUT_JSON='${{ toJson(steps.release.outputs) }}'
+           PR_JSON=$(echo "$OUTPUT_JSON" | jq -r '.pr | fromjson')
+           TITLE=$(echo "$PR_JSON" | jq -r '.title')
+           VERSION=$(echo "$TITLE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+           echo "version=$VERSION" >> $GITHUB_OUTPUT
+   ```
+
+#### Configure Deployment Versioning:
+1. Modify your deployment process to accept a **version parameter**(e.g. [step 2 in the new pipeline section](#5-create-a-new-pipeline)). This ensures that the pipeline deploys a specified version instead of relying on Jenkins' auto-generated versioning.
+2. Update the Jenkins pipeline configuration to support the new versioning mechanism.
+3. Use the following configuration file to automate the versioning process:
+
+   ```json
+   {
+     "packages": {
+       "deployments/unic-id": {
+         "changelog-path": "CHANGELOG.md",
+         "release-type": "helm"
+       },
+       "deployments/unic-id-verifier": {
+         "changelog-path": "CHANGELOG.md",
+         "release-type": "helm"
+       }
+     },
+     "bump-minor-pre-major": true,
+     "bump-patch-for-minor-pre-major": true,
+     "include-component-in-tag": true,
+     "include-v-in-tag": false,
+     "tag-separator": "-",
+     "separate-pull-requests": true,
+     "pull-request-title-pattern": "chore(release):${scope} ${component} ${version}",
+     "release-search-depth": 100,
+     "commit-search-depth": 100,
+     "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+   }
+   ```
+
+4. When initializing a component for the first time, use the `bootstrap` command.
+5. For further customization, check the configuration examples in the [`examples`](/jenkins/example/release-please/) directory.
+
+With this setup, versioning is automated, ensuring consistency and traceability in your releases.
+
