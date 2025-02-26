@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   detect-changes:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release)') }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -71,7 +70,7 @@ jobs:
 
   trigger-jenkins:
     needs: release-charts
-    if: ${{ needs.release-charts.outputs.version != '' }}
+    if: ${{ needs.release-charts.outputs.version != '' && !startsWith(github.event.head_commit.message, 'chore(release)') }}
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.release-charts.outputs.matrix) }}
