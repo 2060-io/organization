@@ -61,6 +61,7 @@ jobs:
         run: echo ${{ toJson(steps.release.outputs) }}
       - name: Get version from manifest
         id: get-version
+        if: ${{ steps.release.outputs.releases_created == 'false' }}
         run: |
           OUTPUT_JSON='${{ toJson(steps.release.outputs) }}'
           PR_JSON=$(echo "$OUTPUT_JSON" | jq -r '.pr | fromjson')
