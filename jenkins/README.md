@@ -35,8 +35,23 @@ To add GitHub credentials
 ### 4. Best Practices for a New Deployment Repository
 
 ### Namespace Handling
-- If a new namespace is required, it is recommended to define it in the deployment files.
-- For existing namespaces, exclude them from `deployment.yaml` to prevent conflicts.
+- If a new namespace is required, it is recommended to define it in the deployment files.  
+- For existing namespaces, exclude them from `deployment.yaml` to prevent conflicts.  
+- *(Recommended)* Use a [`pre-requisites.yaml`](./example/pre-requisites.yaml) file to define the necessary configurations for setting up namespaces and permissions. This approach ensures consistency across deployments and can be adjusted based on project requirements.  
+
+#### Recommended Configuration with `pre-requisites.yaml`  
+The `pre-requisites.yaml` file should include:  
+- **Namespace manifest**  
+- **ServiceAccount manifest**  
+- **Role manifest** with the necessary permissions to create resources such as apps, ingress, etc.  
+- **Secret registry-credentials** to allow the creation of Docker containers within the corresponding namespace.  
+
+This file should be customized as needed and applied manually using:  
+
+```bash
+kubectl apply -f pre-requisites.yaml
+```
+It is recommended to review and adapt the configurations according to the specific requirements of each repository.
 
 ### Helm `values.yaml` Requirements
 The `values.yaml` file must include at least the following fields for Blue/Green deployments:
