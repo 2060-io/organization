@@ -61,7 +61,7 @@ Use the `if-end` clause for everything except clause for everything except State
 For more details on Blue/Green deployment strategies, refer to [Red Hat's guide](https://www.redhat.com/en/topics/devops/what-is-blue-green-deployment).
 
 ### Example Project
-You can find a sample project illustrating the expected structure [here](./example/).
+You can find a sample project illustrating the expected structure [here](./example/helm/).
 
 ### 5. Create a New Pipeline
 To create a new pipeline, follow these steps:
