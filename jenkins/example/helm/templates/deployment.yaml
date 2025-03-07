@@ -8,7 +8,7 @@ metadata:
     app: {{ .Values.name }}
 spec:
   selector:
-    app: {{ .Values.name }}
+    app: {{ .Values.name }}-{{ .Values.deployment.color }}
     color: {{ .Values.deployment.color }}
   ports:
     ...
@@ -35,12 +35,12 @@ spec:
    replicas: {{ .Values.replicas }}
    selector:
       matchLabels:
-         app: {{ .Values.name }}
+         app: {{ .Values.name }}-{{ .Values.deployment.color }}
          color: {{ .Values.deployment.color }}
    template:
       metadata:
          labels:
-            app: {{ .Values.name }}
+            app: {{ .Values.name }}-{{ .Values.deployment.color }}
             color: {{ .Values.deployment.color }}
       spec:
          containers:
