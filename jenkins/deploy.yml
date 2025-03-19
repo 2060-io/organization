@@ -1,0 +1,49 @@
+name: Deploy Projects via Jenkins
+on:
+  push:
+    paths:
+      - 'deployments/**'
+    branches:
+      - main
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          path: 'deployments'
+          separator: ','
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          if [[ -z "${{ steps.changed-files.outputs.all_changed_files }}" ]]; then
+            echo "matrix={\"project\":[]}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Extract unique project names from changes in "deployments/" directory
+          PROJECTS=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | \
+            tr ',' '\n' | \
+            awk -F '/' 'NF>1 {print $2}' | \
+            sort -u | \
+            jq -R . | jq -s . | tr -d '\n')
+          echo "matrix={\"project\":$PROJECTS}" >> $GITHUB_OUTPUT
+
+  trigger-jenkins:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.matrix != '{"project":[]}' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    steps:
+      - name: Trigger Jenkins webhook for project
+        run: |
+          echo "Triggering Jenkins webhook for project ${{ matrix.project }}"
+          curl -u "${{ github.actor }}:${{ secrets.OAUTH_TOKEN }}" \
+            "${{ secrets.JENKINS_URL }}/job/deployments/job/${{ matrix.project }}/buildWithParameters?token=${{ secrets.JENKINS_TOKEN }}&PROJECT=${{ matrix.project }}"

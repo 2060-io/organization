@@ -1,0 +1,7 @@
+blueocean:1.27.16
+github:1.41.0
+github-authentication:621.v33b_4394dda_4d
+github-branch-source:1810.v913311241fa_9
+envinject:2.926.v69c9b_3896a_96
+workflow-aggregator:600.vb_57cdd26fdd7
+kubernetes:4313.va_9b_4fe2a_0e34
