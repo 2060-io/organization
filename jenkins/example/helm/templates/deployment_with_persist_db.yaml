@@ -1,0 +1,109 @@
+{{- if .Values.deployment.first }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+spec:
+  selector:
+    app: {{ .Values.name }}-{{ .Values.deployment.color }}
+    color: {{ .Values.deployment.color }}
+  ports:
+    ...
+---
+# Public ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: public-{{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ...
+---
+# PVC for shared db between blue-green deployment
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.name }}-sa-pv
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+    color: {{ .Values.deployment.color }}
+  annotations:
+    helm.sh/resource-policy: keep ## persist after unistall
+spec:
+  accessModes:
+    - "ReadWriteOnce"
+  storageClassName: csi-cinder-high-speed
+  volumeName: ovh-managed-kubernetes-s2jb2y-pvc-ac52810b-4346-4902-9068-f21aa8f27ef4
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.name }}-pg-pv-main
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+    color: {{ .Values.deployment.color }}
+  annotations:
+    helm.sh/resource-policy: keep ## persist after unistall
+spec:
+  accessModes:
+    - "ReadWriteOnce"
+  storageClassName: csi-cinder-classic
+  volumeName: ovh-managed-kubernetes-s2jb2y-pvc-707476d1-8a22-4ed7-8830-f3310b5fd94b
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.name }}-redis-main
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+    color: {{ .Values.deployment.color }}
+  annotations:
+    helm.sh/resource-policy: keep ## persist after unistall
+spec:
+  accessModes:
+    - "ReadWriteOnce"
+  storageClassName: csi-cinder-classic
+  volumeName: ovh-managed-kubernetes-s2jb2y-pvc-5f8ea1e6-83fa-4fed-87b2-a3494f440b36
+  resources:
+    requests:
+      storage: 1Gi
+{{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+   name: {{ .Values.name }}-{{ .Values.deployment.color }}
+   namespace: {{ .Values.namespace }}
+spec:
+   serviceName: {{ .Values.name }}
+   replicas: {{ .Values.replicas }}
+   selector:
+      matchLabels:
+         app: {{ .Values.name }}-{{ .Values.deployment.color }}
+         color: {{ .Values.deployment.color }}
+   template:
+      metadata:
+         labels:
+            app: {{ .Values.name }}-{{ .Values.deployment.color }}
+            color: {{ .Values.deployment.color }}
+      spec:
+         containers:
+          ...
+
+   volumeClaimTemplates: 
+   - metadata:
+       ...
