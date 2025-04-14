@@ -126,6 +126,7 @@ pipeline {
                     def isFirstDeployment = serviceExists ? "false" : "true"
                     echo "Installing ${params.PROJECT} on ${env.CURRENT_COLOR} (first deployment: ${isFirstDeployment})..."
                     def chartPath = "${CHARTS_DIR}/${params.PROJECT}"
+                    patchPVCs(env.KUBE_NAMESPACE, env.SERVICE_NAME, env.CURRENT_COLOR)
                     sh """
                         helm upgrade --install 2060-${params.PROJECT}-${env.CURRENT_COLOR} ${chartPath} \
                         --set image.tag=${params.VERSION} \
@@ -156,7 +157,6 @@ pipeline {
                     } else {
                         echo "Service ${env.SERVICE_NAME} does not exist. Skipping update."
                     }
-                    patchPVCs(env.KUBE_NAMESPACE, env.SERVICE_NAME, env.PREVIOUS_COLOR)
                 }
             }
         }
