@@ -233,28 +233,32 @@ To initiate a migration process in the deployment system, it is essential to hav
 1. **Check the PVCs in the Target Namespace**  
    Run the following command to list all PVCs in the relevant namespace:
    ```sh
-   kubectl get pvc --namespace=64270-dev
+   kubectl get pvc --namespace=demos-dev
    ```
 
 2. **Retrieve PV Details**  
    Obtain details of the target Persistent Volume (PV) using:
    ```sh
-   kubectl describe pv ovh-managed-kubernetes-s2jb2y-pvc-707476d1-8a22-4ed7-8830-f3310b5fd94b
+   kubectl describe pv ovh-managed-kubernetes-s2jb2y-pvc-df66660e-ceb2-4d50-942a-dfe3f9ffff7a
    ```
 
 3. **Update PV with Retain Policy**  
    To prevent the PV from being deleted even when it is not associated with a PVC, update its reclaim policy:
    ```sh
-   kubectl patch pv ovh-managed-kubernetes-s2jb2y-pvc-707476d1-8a22-4ed7-8830-f3310b5fd94b -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+   kubectl patch pv ovh-managed-kubernetes-s2jb2y-pvc-df66660e-ceb2-4d50-942a-dfe3f9ffff7a -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
    ```
 
 4. **Delete the PVC**  
    Ensure that the associated service is stopped to avoid potential errors. If the steps are followed correctly, the service will be down for approximately 10 minutes:
    ```sh
-   kubectl delete pvc unic-id-test-pg-pv-main -n 64270-dev
+   kubectl delete pvc unic-id-test-pg-pv-main -n demos-dev
    ```
 
-5. **Deploy the New Configuration**  
+5. **Remove claimRef from the PV**  
+   After the PVC is deleted, manually remove the `claimRef` from the PV to allow it to be bound to a new PVC:
+   ```sh
+   kubectl patch pv ovh-managed-kubernetes-s2jb2y-pvc-acb677e7-c451-46ac-b91b-341b98aa52ad --type=json -p='[{"op": "remove", "path": "/spec/claimRef"}]'
+   ```
+
+6. **Deploy the New Configuration**  
    After completing the previous steps, proceed with the new deployment provided in the [example](./example/helm/templates/deployment_with_persist_db.yaml). This new deployment will create independent PVCs. If the PVCs are created from scratch, there is no need to associate them with any `volumeName`.
-
-
