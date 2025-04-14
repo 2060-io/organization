@@ -262,3 +262,30 @@ To initiate a migration process in the deployment system, it is essential to hav
 
 6. **Deploy the New Configuration**  
    After completing the previous steps, proceed with the new deployment provided in the [example](./example/helm/templates/deployment_with_persist_db.yaml). This new deployment will create independent PVCs. If the PVCs are created from scratch, there is no need to associate them with any `volumeName`.
+
+
+7. **Associate a New PVC to the Existing PV using `volumeName`**  
+   If you want to reuse the existing PV (e.g. the retained volume from the previous deployment), define the `volumeName` in your new PVC specification. This binds the PVC directly to the specified PV. For example:
+
+   ```yaml
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: {{ .Values.name }}-pg-pv-main
+     namespace: {{ .Values.namespace }}
+     labels:
+       app: {{ .Values.name }}
+       color: {{ .Values.deployment.color }}
+     annotations:
+       helm.sh/resource-policy: keep
+   spec:
+     accessModes:
+       - "ReadWriteOnce"
+     storageClassName: csi-cinder-classic
+     volumeName: ovh-managed-kubernetes-s2jb2y-pvc-acb677e7-c451-46ac-b91b-341b98aa52ad
+     resources:
+       requests:
+         storage: 1Gi
+   ```
+
+   This ensures the new PVC will claim the existing PV, provided the access mode, storage class, and requested size are compatible.
