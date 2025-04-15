@@ -5,11 +5,6 @@ def cleanupResources() {
         sh "helm uninstall ${releaseName} --namespace=${env.KUBE_NAMESPACE}"
     }
 
-    if (env.CURRENT_COLOR == 'green') {
-        echo "🗑️ Deleting PVCs for current color: green"
-        sh "kubectl delete pvc --namespace=${env.KUBE_NAMESPACE} -l app=${env.SERVICE_NAME},color=${env.CURRENT_COLOR}"
-    }
-
     if (env.PREVIOUS_COLOR && env.PREVIOUS_COLOR != 'none') {
         echo "🔄 Restoring service ${env.SERVICE_NAME} to previous color: ${env.PREVIOUS_COLOR}"
         sh """
@@ -19,8 +14,8 @@ def cleanupResources() {
     }
 }
 
-def patchPVCs(namespace, appName, previousColor) {
-    echo "🔧 Patching PVCs to previous color: ${previousColor}"
+def patchPVCs(namespace, appName, color) {
+    echo "🔧 Patching PVCs to previous color: ${color}"
 
     def pvcList = sh(
         script: "kubectl get pvc -n ${namespace} -l app=${appName} -o=jsonpath='{.items[*].metadata.name}'",
@@ -30,7 +25,7 @@ def patchPVCs(namespace, appName, previousColor) {
     if (pvcList.size() > 0 && pvcList[0] != "") {
         for (pvc in pvcList) {
             echo "Patching PVC: ${pvc}"
-            sh "kubectl patch pvc ${pvc} -n ${namespace} --type='merge' -p '{\"metadata\": {\"labels\": {\"color\": \"${previousColor}\"}}}'"
+            sh "kubectl patch pvc ${pvc} -n ${namespace} --type='merge' -p '{\"metadata\": {\"labels\": {\"color\": \"${color}\"}}}'"
         }
     } else {
         echo "❌ No PVCs found for app=${appName} in namespace=${namespace}"
