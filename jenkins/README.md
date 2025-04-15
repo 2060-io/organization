@@ -223,3 +223,69 @@ With this setup, Jenkins will authenticate users via GitHub, simplifying access 
 
 With this setup, versioning is automated, ensuring consistency and traceability in your releases.
 
+### 10. (Optional & Recommended) PVC Migration for New Integration
+
+#### Kubernetes Persistent Volume Claim (PVC) Migration Process
+To initiate a migration process in the deployment system, it is essential to have a clear understanding of the following aspects. In Kubernetes, PVCs do not store data themselves; instead, they act as a bridge to connect with the actual stored data. Therefore, before starting the migration, it is crucial to identify the required PVCs and PVs.
+
+#### Steps for Migration
+
+1. **Check the PVCs in the Target Namespace**  
+   Run the following command to list all PVCs in the relevant namespace:
+   ```sh
+   kubectl get pvc --namespace=demos-dev
+   ```
+
+2. **Retrieve PV Details**  
+   Obtain details of the target Persistent Volume (PV) using:
+   ```sh
+   kubectl describe pv ovh-managed-kubernetes-s2jb2y-pvc-df66660e-ceb2-4d50-942a-dfe3f9ffff7a
+   ```
+
+3. **Update PV with Retain Policy**  
+   To prevent the PV from being deleted even when it is not associated with a PVC, update its reclaim policy:
+   ```sh
+   kubectl patch pv ovh-managed-kubernetes-s2jb2y-pvc-df66660e-ceb2-4d50-942a-dfe3f9ffff7a -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+   ```
+
+4. **Delete the PVC**  
+   Ensure that the associated service is stopped to avoid potential errors. If the steps are followed correctly, the service will be down for approximately 10 minutes:
+   ```sh
+   kubectl delete pvc unic-id-test-pg-pv-main -n demos-dev
+   ```
+
+5. **Remove claimRef from the PV**  
+   After the PVC is deleted, manually remove the `claimRef` from the PV to allow it to be bound to a new PVC:
+   ```sh
+   kubectl patch pv ovh-managed-kubernetes-s2jb2y-pvc-acb677e7-c451-46ac-b91b-341b98aa52ad --type=json -p='[{"op": "remove", "path": "/spec/claimRef"}]'
+   ```
+
+6. **Deploy the New Configuration**  
+   After completing the previous steps, proceed with the new deployment provided in the [example](./example/helm/templates/deployment_with_persist_db.yaml). This new deployment will create independent PVCs. If the PVCs are created from scratch, there is no need to associate them with any `volumeName`.
+
+
+7. **Associate a New PVC to the Existing PV using `volumeName`**  
+   If you want to reuse the existing PV (e.g. the retained volume from the previous deployment), define the `volumeName` in your new PVC specification. This binds the PVC directly to the specified PV. For example:
+
+   ```yaml
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: {{ .Values.name }}-pg-pv-main
+     namespace: {{ .Values.namespace }}
+     labels:
+       app: {{ .Values.name }}
+       color: {{ .Values.deployment.color }}
+     annotations:
+       helm.sh/resource-policy: keep
+   spec:
+     accessModes:
+       - "ReadWriteOnce"
+     storageClassName: csi-cinder-classic
+     volumeName: ovh-managed-kubernetes-s2jb2y-pvc-acb677e7-c451-46ac-b91b-341b98aa52ad
+     resources:
+       requests:
+         storage: 1Gi
+   ```
+
+   This ensures the new PVC will claim the existing PV, provided the access mode, storage class, and requested size are compatible.
