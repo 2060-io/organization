@@ -4,7 +4,7 @@ This document describes the detailed procedure to deploy core components of the 
 
 ---
 
-## 📦 Prerequisites
+## 📦 Pre-requisites
 
 Before starting any deployment, ensure the following:
 
