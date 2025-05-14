@@ -1,0 +1,25 @@
+@startuml
+actor Developer
+participant "GitHub" as GH
+participant "Jenkins" as JNK
+participant "Kubernetes Cluster" as K8S
+
+== Start Deployment ==
+
+Developer -> K8S: Check active color via helm list
+Developer -> Local: Update Chart.yaml and values.yaml
+Developer -> GH: Create branch and push changes
+Developer -> GH: Open Pull Request
+
+GH -> Developer: PR Approval Required
+Developer -> GH: Approve PR
+
+GH -> JNK: Trigger deployment via GitHub Actions
+JNK -> K8S: Deploy opposite color release
+K8S -> JNK: Report deployment status
+
+Developer -> JNK: Review logs and endpoint
+Developer -> K8S: Update Ingress/service to new release
+
+== Deployment Complete ==
+@enduml
