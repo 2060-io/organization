@@ -1,6 +1,6 @@
 # 🚀 2060.io Deployment Strategy – Detailed Guide
 
-This document describes the detailed procedure to deploy core components of the **2060.io** infrastructure. It covers both automated deployments using **Jenkins with Blue-Green strategy** and manual deployments via **Helm**. The goal is to standardize and clarify every step to ensure safe and reliable deployments.
+This document describes the detailed procedure to deploy components of the **2060.io** infrastructure. It covers both automated deployments using **Jenkins with Blue-Green strategy** and manual deployments via **Helm**. The goal is to standardize and clarify every step to ensure safe and reliable deployments.
 
 ---
 
@@ -10,18 +10,19 @@ Before starting any deployment, ensure the following:
 
 ### 🔐 Access Requirements
 
-- Access to the GitHub repositories: [2060-core-deploy-dev](https://github.com/2060-io/2060-core-deploy-dev), [2060-core-deploy-prod](https://github.com/2060-io/2060-core-deploy-prod), and [2060-demos-deploy-dev](https://github.com/2060-io/2060-demos-deploy-dev)
-- Access to [**Jenkins**](https://jenkins.dev.2060.io) with permissions to execute deployment jobs
+- Access to the relevant GitHub deployment repositories (e.g. [2060-core-deploy-dev])
+- Access to the appropriate **Jenkins** instance (e.g. <https://jenkins.dev.2060.io>) with permissions to execute deployment jobs
 - Access to **Kubernetes cluster**
 - DockerHub read/push credentials (as needed)
 
-### 💻 Tools Installed
+### 💻 Tools Needed (Local Environment)
+
+Only required for **manual Helm deployments**:
 
 - `kubectl`
 - `helm` v3+
-- `git`
 - Valid `KUBECONFIG` file
-- Jenkins UI access
+- `git` (to fetch the latest deployment chart)
 
 ---
 
@@ -40,6 +41,8 @@ Example: `2060-webrtc-server-blue`
 ### 🔁 Deployment Workflow
 
 Before starting, ensure that a Jenkins pipeline is already configured for the service you intend to deploy. Each service must have a corresponding job in Jenkins to execute the deployment process.
+
+If your service does not yet have a pipeline, follow the steps in the [Create a New Pipeline](./README.md#5-create-a-new-pipeline) section of the Jenkins guide.
 
 ![Deployment Workflow Diagram](./docs/diagrams/deployment_workflow.png)
 
@@ -75,7 +78,19 @@ Before starting, ensure that a Jenkins pipeline is already configured for the se
    - Validate endpoint and logs for the new release
 
 8. **Switch traffic**
-   - Update Ingress or service selectors to route traffic to the new release
+
+   - Update Ingress or service selectors to route traffic to the new release.
+
+   This step is triggered manually in Jenkins **only if the deployment stage completes successfully**:
+
+   - In the classic Jenkins UI:  
+     Scroll to the pipeline log and click the **"Approve and Switch Traffic"** button when prompted.  
+     Alternatively, click **"Abort"** to cancel the switch if something needs to be reviewed.
+
+   - In Blue Ocean:  
+     Locate the `Switch Traffic` stage in the visual pipeline and click **"Approve and Switch Traffic"** to continue.
+
+   This manual approval step will **not appear** if the pipeline fails before reaching the traffic switch stage.
 
 ---
 

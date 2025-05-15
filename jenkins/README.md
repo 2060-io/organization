@@ -43,6 +43,8 @@ To add GitHub credentials
 
 ### 4. Best Practices for a New Deployment Repository
 
+For the full and updated deployment guide, see the [2060.io Deployment Strategy Guide](./deployment-strategy.md).
+
 ### Namespace Handling
 
 - If a new namespace is required, it is recommended to define it in the deployment files.  
@@ -251,10 +253,6 @@ With this setup, Jenkins will authenticate users via GitHub, simplifying access 
 5. For further customization, check the configuration examples in the [`examples`](/jenkins/example/release-please/) directory.
 
 With this setup, versioning is automated, ensuring consistency and traceability in your releases.
-
-### How to Deploy Components
-
-For a detailed, step-by-step guide on how deployments work in the 2060.io ecosystem—including naming conventions, Jenkins integration, Helm usage, and best practices—refer to the [2060.io Deployment Strategy Guide](./deployment-strategy.md).
 
 ### 10. (Optional & Recommended) PVC Migration for New Integration
 
