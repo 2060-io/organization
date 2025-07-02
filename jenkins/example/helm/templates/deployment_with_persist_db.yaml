@@ -1,3 +1,8 @@
+# If PersistentVolumeClaims (PVCs) are implemented in a blue-green strategy using Helm with helm
+# upgrade --install and keep policies, the green PVCs will not be deleted during deployments. 
+# This can lead to leftover volumes and unnecessary resource consumption.
+# For this reason, it is recommended to use a StatefulSet deployment pattern, where volumes are
+# directly tied to the pod lifecycle, ensuring cleaner and more consistent volume management.
 {{- if .Values.deployment.first }}
 apiVersion: v1
 kind: Service
