@@ -34,12 +34,7 @@ jobs:
         run: pnpm check-types
 
       - name: Unit Tests
-        run: |
-          if pnpm run | grep -q "test"; then
-            pnpm test
-          else
-            echo "Skipping Unit tests (script not defined)"
-          fi
+        run: pnpm test
 
       - name: Integration Tests
         run: |
