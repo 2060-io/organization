@@ -1,0 +1,79 @@
+name: Continuous Integration
+
+on:
+  workflow_call:
+    inputs:
+      charts-dir:
+        description: "Directory containing Helm charts"
+        required: false
+        type: string
+
+jobs:
+  lint:
+    name: Lint, Types & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js v22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Format
+        run: pnpm check-format
+
+      - name: Check Types
+        run: pnpm check-types
+
+      - name: Unit Tests
+        run: pnpm test
+
+      - name: Integration Tests
+        run: pnpm test:integration
+
+  charts:
+    name: Validate Helm Charts
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+
+      - name: Validate Helm charts
+        run: |
+          charts_dir="${{ inputs.charts-dir }}"
+          echo "Using charts directory: $charts_dir"
+
+          if [ -n "$charts_dir" ] && [ -d "$charts_dir" ]; then
+            helm lint "$charts_dir"
+          else
+            for chart in ./charts/*; do
+              if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+                echo "Validating chart: $chart"
+                helm lint "$chart"
+              fi
+            done
+          fi
+
+  pr-validation:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: lint
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5.5.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          validateSingleCommit: true
