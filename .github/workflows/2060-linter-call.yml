@@ -39,6 +39,9 @@ jobs:
       - name: Integration Tests
         run: pnpm test:integration
 
+      - name: End to End Tests
+        run: pnpm test:e2e
+
   charts:
     name: Validate Helm Charts
     runs-on: ubuntu-latest
