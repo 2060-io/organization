@@ -34,13 +34,28 @@ jobs:
         run: pnpm check-types
 
       - name: Unit Tests
-        run: pnpm test
+        run: |
+          if pnpm run | grep -q "test"; then
+            pnpm test
+          else
+            echo "Skipping Unit tests (script not defined)"
+          fi
 
       - name: Integration Tests
-        run: pnpm test:integration
+        run: |
+          if pnpm run | grep -q "test:integration"; then
+            pnpm test:integration
+          else
+            echo "Skipping integration tests (script not defined)"
+          fi
 
       - name: End to End Tests
-        run: pnpm test:e2e
+        run: |
+          if pnpm run | grep -q "test:e2e"; then
+            pnpm test:e2e
+          else
+            echo "Skipping end-to-end tests (script not defined)"
+          fi
 
   charts:
     name: Validate Helm Charts
