@@ -7,6 +7,11 @@ on:
         description: "Directory containing Helm charts"
         required: false
         type: string
+      enable-charts-lint:
+        description: "Enable Helm charts linting"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   lint:
@@ -26,6 +31,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
 
       - name: Check Format
         run: pnpm check-format
@@ -56,6 +64,7 @@ jobs:
     name: Validate Helm Charts
     runs-on: ubuntu-latest
     needs: lint
+    if: ${{ inputs.enable-charts-lint == true }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
