@@ -16,7 +16,7 @@ To use this workflow in another repository or workflow, reference it in your Git
 ```yaml
 jobs:
   build-and-publish:
-    uses: 2060-io/devops/workflows_call/unstable-image/template.yml@main
+    uses: 2060-io/organization/workflows_call/unstable-image/template.yml@main
     with:
       dockerfile: "path/to/dockerfile=image-name"
       image-tag: "dev"

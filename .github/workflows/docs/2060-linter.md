@@ -86,7 +86,7 @@ on:
 
 jobs:
   ci:
-    uses: 2060-io/devops/workflows_call/2060-linter/template.yml@main
+    uses: 2060-io/organization/workflows_call/2060-linter/template.yml@main
     with:
       charts-dir: ./helm/my-service
 ```
