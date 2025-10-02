@@ -15,7 +15,7 @@ To consume this workflow, include it in another workflow using the `uses` keywor
 ```yaml
 jobs:
   call-stable-image-template:
-    uses: 2060-io/devops/workflows_call/stable-image/template.yml@main
+    uses: 2060-io/organization/workflows_call/stable-image/template.yml@main
     with:
       dockerfile: "path/to/dockerfile=image-name"
       image-tag: "latest"
