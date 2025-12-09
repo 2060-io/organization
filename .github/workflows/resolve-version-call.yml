@@ -1,0 +1,128 @@
+name: Stable Versioning
+
+on:
+  workflow_call:
+    outputs:
+      release-version:
+        description: "Release version from versioning system"
+        value: ${{ jobs.versioning.outputs.release-version }}
+      
+      release-type:
+        description: "Type of release created (stable or dev)"
+        value: ${{ jobs.versioning.outputs.release-type }}
+
+      new-release-published:
+        description: "Indicates if a new release was created"
+        value: ${{ jobs.versioning.outputs.new-release-published }}
+
+      release-major:
+        value: ${{ jobs.versioning.outputs.release-major }}
+
+      release-minor:
+        value: ${{ jobs.versioning.outputs.release-minor }}
+
+      release-patch:
+        value: ${{ jobs.versioning.outputs.release-patch }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  versioning:
+    runs-on: ubuntu-latest
+    outputs:
+      release-version: ${{ steps.set-version.outputs.version }}
+      release-type: ${{ steps.set-version.outputs.type }}
+      new-release-published: ${{ steps.set-version.outputs.published }}
+      release-major: ${{ steps.set-version.outputs.major }}
+      release-minor: ${{ steps.set-version.outputs.minor }}
+      release-patch: ${{ steps.set-version.outputs.patch }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure release branch exists
+        run: |
+          if git ls-remote --heads origin release | grep release; then
+            echo "Branch 'release' already exists in origin."
+          else
+            echo "Branch 'release' does not exist. Creating it..."
+            git checkout -b release
+            git push origin release
+          fi
+
+      - name: Process Release Please (Stable)
+        uses: googleapis/release-please-action@v4
+        id: release-please
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Debug Release Please outputs
+        continue-on-error: true
+        run: |
+          echo "Release outputs:"
+          echo "${{ toJson(steps.release-please.outputs) }}"
+
+      - name: Fallback to Semantic Release (Dev)
+        if: steps.release-please.outputs.release_created != 'true'
+        uses: codfish/semantic-release-action@v3
+        id: semantic-release
+        with:
+          branches: |
+            [
+              'release',
+              { 
+                name: 'main',
+                prerelease: 'dev'
+              }
+            ]
+          plugins: |
+            [
+              [
+                "@semantic-release/commit-analyzer",
+                {
+                  "preset": "angular",
+                  "releaseRules": [
+                    { "type": "refactor", "release": "patch" },
+                    { "type": "build", "release": "patch" }
+                  ]
+                }
+              ],
+              [
+                "@semantic-release/npm",
+                { "npmPublish": false }
+              ],
+              "@semantic-release/release-notes-generator"
+            ]
+
+      - name: Set final version outputs
+        id: set-version
+        run: |
+          if [ "${{ steps.release-please.outputs.releases_created }}" == "true" ]; then
+            echo "version=${{ steps.release-please.outputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "type=latest" >> $GITHUB_OUTPUT
+            echo "published=true" >> $GITHUB_OUTPUT
+            echo "major=${{ steps.release-please.outputs.major }}" >> $GITHUB_OUTPUT
+            echo "minor=${{ steps.release-please.outputs.minor }}" >> $GITHUB_OUTPUT
+            echo "patch=${{ steps.release-please.outputs.patch }}" >> $GITHUB_OUTPUT
+            echo "Stable release created: ${{ steps.release-please.outputs.tag_name }}"
+          elif [ "${{ steps.semantic-release.outputs.new-release-published }}" == "true" ]; then
+            echo "version=v${{ steps.semantic-release.outputs.release-version }}" >> $GITHUB_OUTPUT
+            echo "type=dev" >> $GITHUB_OUTPUT
+            echo "published=true" >> $GITHUB_OUTPUT
+            echo "major=${{ steps.semantic-release.outputs.release-major }}" >> $GITHUB_OUTPUT
+            echo "minor=${{ steps.semantic-release.outputs.release-minor }}" >> $GITHUB_OUTPUT
+            echo "patch=${{ steps.semantic-release.outputs.release-patch }}" >> $GITHUB_OUTPUT
+            echo "Dev release created: ${{ steps.semantic-release.outputs.release-version }}"
+          else
+            echo "type=none" >> $GITHUB_OUTPUT
+            echo "published=false" >> $GITHUB_OUTPUT
+            echo "No release created"
+          fi
