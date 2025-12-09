@@ -6,6 +6,10 @@ on:
       release-version:
         description: "Release version from versioning system"
         value: ${{ jobs.versioning.outputs.release-version }}
+      
+      release-type:
+        description: "Type of release created (stable or dev)"
+        value: ${{ jobs.versioning.outputs.release-type }}
 
 permissions:
   contents: write
@@ -24,7 +28,7 @@ jobs:
       release-patch: ${{ steps.set-version.outputs.patch }}
 
     steps:
-      - name: Checkout vs-agent
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -47,15 +51,15 @@ jobs:
           manifest-file: .release-please-manifest.json
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Print release outputs for debugging
+      - name: Debug Release Please outputs
         continue-on-error: true
         run: |
           echo "Release outputs:"
-          echo "${{ toJson(steps.semantic.outputs) }}"
+          echo "${{ toJson(steps.release-please.outputs) }}"
 
       - name: Fallback to Semantic Release (Dev)
+        if: steps.release-please.outputs.release_created != 'true'
         uses: codfish/semantic-release-action@v3
-        if: steps.release-please.outputs.releases_created != 'true'
         id: semantic-release
         with:
           branches: |
@@ -105,5 +109,7 @@ jobs:
             echo "patch=${{ steps.semantic-release.outputs.release-patch }}" >> $GITHUB_OUTPUT
             echo "Dev release created: ${{ steps.semantic-release.outputs.release-version }}"
           else
-            echo "No release created, using default tag: ${{ inputs.image-tag }}"
+            echo "type=none" >> $GITHUB_OUTPUT
+            echo "published=false" >> $GITHUB_OUTPUT
+            echo "No release created"
           fi
