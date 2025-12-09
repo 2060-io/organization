@@ -11,6 +11,19 @@ on:
         description: "Type of release created (stable or dev)"
         value: ${{ jobs.versioning.outputs.release-type }}
 
+      new-release-published:
+        description: "Indicates if a new release was created"
+        value: ${{ jobs.versioning.outputs.new-release-published }}
+
+      release-major:
+        value: ${{ jobs.versioning.outputs.release-major }}
+
+      release-minor:
+        value: ${{ jobs.versioning.outputs.release-minor }}
+
+      release-patch:
+        value: ${{ jobs.versioning.outputs.release-patch }}
+
 permissions:
   contents: write
   pull-requests: write
