@@ -114,7 +114,7 @@ jobs:
             echo "patch=${{ steps.release-please.outputs.patch }}" >> $GITHUB_OUTPUT
             echo "Stable release created: ${{ steps.release-please.outputs.tag_name }}"
           elif [ "${{ steps.semantic-release.outputs.new-release-published }}" == "true" ]; then
-            echo "version=${{ steps.semantic-release.outputs.release-version }}" >> $GITHUB_OUTPUT
+            echo "version=v${{ steps.semantic-release.outputs.release-version }}" >> $GITHUB_OUTPUT
             echo "type=dev" >> $GITHUB_OUTPUT
             echo "published=true" >> $GITHUB_OUTPUT
             echo "major=${{ steps.semantic-release.outputs.release-major }}" >> $GITHUB_OUTPUT
