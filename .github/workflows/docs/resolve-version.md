@@ -42,6 +42,45 @@ If neither system determines that a release should be created, the workflow outp
 
 ---
 
+## **Required Files for Release Please**
+
+For **Release Please** to operate correctly within this workflow, you must include the minimum configuration and manifest files in the root of your repository.
+
+### **1. `release-please-config.json`**
+
+This file defines how Release Please manages versioning, changelogs, and tagging behavior.
+
+```json
+{
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "separate-pull-requests": true,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "packages": {
+    ".": {
+      "changelog-path": "CHANGELOG.md",
+      "release-type": "node"
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}
+```
+
+### **2. `.release-please-manifest.json`**
+
+The manifest file contains the current version of your project. Release Please reads and updates this file automatically on each release.
+
+```json
+{
+  ".": "1.5.3"
+}
+```
+
+Both files are mandatory. Without them, Release Please will not detect components, generate release PRs, or manage version bumps.
+
+---
+
 ## Branch Requirements
 
 The workflow expects a `release` branch to exist.
