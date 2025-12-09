@@ -94,7 +94,7 @@ jobs:
         run: |
           if [ "${{ steps.release-please.outputs.releases_created }}" == "true" ]; then
             echo "version=${{ steps.release-please.outputs.tag_name }}" >> $GITHUB_OUTPUT
-            echo "type=stable" >> $GITHUB_OUTPUT
+            echo "type=latest" >> $GITHUB_OUTPUT
             echo "published=true" >> $GITHUB_OUTPUT
             echo "major=${{ steps.release-please.outputs.major }}" >> $GITHUB_OUTPUT
             echo "minor=${{ steps.release-please.outputs.minor }}" >> $GITHUB_OUTPUT
