@@ -1,0 +1,23 @@
+name: Setup Kubeconfig
+description: |
+  Sets up Helm CLI and configures a Kubernetes cluster using a base64-encoded kubeconfig file.
+author: 2060
+inputs:
+  kubeconfig:
+    description: Base64-encoded kubeconfig for accessing the Kubernetes cluster.
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+
+    - name: Configure KUBECONFIG
+      shell: bash
+      run: |
+        KUBECONFIG_PATH=${{ github.workspace }}/kubeconfig
+        echo "${{ inputs.kubeconfig }}" | base64 -d > "$KUBECONFIG_PATH" || {
+          echo "❌ Failed to decode kubeconfig. Check that the input is valid base64."
+          exit 1
+        }
+        echo "KUBECONFIG=$KUBECONFIG_PATH" >> $GITHUB_ENV

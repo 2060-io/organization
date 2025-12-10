@@ -1,0 +1,116 @@
+name: Publish Helm Charts
+description: Package and publish one or more Helm charts to Docker Hub OCI registry
+
+inputs:
+  dh-username:
+    description: Docker Hub username
+    required: true
+  dh-token:
+    description: Docker Hub token or password
+    required: true
+  release-version:
+    description: The version to set in Chart.yaml (e.g. v1.2.3)
+    required: true
+  charts:
+    description: Space-separated list of chart directories. If not provided, defaults to all subfolders in ./charts/
+    required: false
+    default: ""
+  dependent-charts:
+    description: Space-separated list of chart directories that have dependencies on other charts in this repo
+    required: false
+    default: ""
+  dry-run:
+    description: If true, only print commands instead of executing
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+
+    - name: Log in to Docker Hub Helm Registry
+      shell: bash
+      run: |
+        echo "${{ inputs.dh-token }}" | helm registry login -u "${{ inputs.dh-username }}" --password-stdin docker.io
+
+    - name: Validate chart directories
+      id: validate
+      shell: bash
+      run: |
+        # If no charts provided, take all subfolders of ./charts
+        if [ -z "${{ inputs.charts }}" ]; then
+          CHART_DIRS=$(find ./charts -mindepth 1 -maxdepth 1 -type d | tr '\n' ' ')
+        else
+          CHART_DIRS="${{ inputs.charts }}"
+        fi
+
+        if [ -z "$CHART_DIRS" ]; then
+          echo "No charts found to process"
+          exit 1
+        fi
+
+        echo "Charts to process: $CHART_DIRS"
+        echo "charts=$CHART_DIRS" >> $GITHUB_OUTPUT
+        echo "dependent_charts=${{ inputs.dependent-charts }}" >> $GITHUB_OUTPUT
+
+    - name: Package and push independent charts
+      id: publish_independent
+      shell: bash
+      run: |
+        CHARTS_TO_PROCESS="${{ steps.validate.outputs.charts }}"
+        DEPENDENT_CHARTS="${{ steps.validate.outputs.dependent_charts }}"
+
+        for chart in $CHARTS_TO_PROCESS; do
+          if [[ " $DEPENDENT_CHARTS " == *" $chart "* ]]; then
+            echo "Skipping dependent chart $chart for now"
+            continue
+          fi
+
+          echo "Processing independent chart: $chart"
+          sed -i "s/^version:.*/version: ${{ inputs.release-version }}/" $chart/Chart.yaml
+          CHART_NAME=$(grep '^name:' $chart/Chart.yaml | awk '{print $2}')
+          helm dependency update $chart
+          helm package $chart -d ./charts
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "helm push ./charts/${CHART_NAME}-${{ inputs.release-version }}.tgz oci://docker.io/${{ inputs.dh-username }}"
+          else
+            helm push ./charts/${CHART_NAME}-${{ inputs.release-version }}.tgz oci://docker.io/${{ inputs.dh-username }}
+          fi
+
+          echo "$CHART_NAME=${{ inputs.release-version }}" >> $GITHUB_ENV
+        done
+
+    - name: Package and push dependent charts
+      shell: bash
+      run: |
+        DEPENDENT_CHARTS="${{ steps.validate.outputs.dependent_charts }}"
+        if [ -z "$DEPENDENT_CHARTS" ]; then
+          echo "No dependent charts to process"
+          exit 0
+        fi
+
+        for chart in $DEPENDENT_CHARTS; do
+          echo "Processing dependent chart: $chart"
+
+          # update top-level version
+          sed -i "s/^version:.*/version: ${{ inputs.release-version }}/" $chart/Chart.yaml
+
+          # update dependency versions based on env vars we set earlier
+          for dep in $(grep 'name:' $chart/Chart.yaml | awk '{print $2}'); do
+            DEP_VERSION=$(printenv $dep || true)
+            if [ ! -z "$DEP_VERSION" ]; then
+              sed -i "s/\(name: $dep.*\n[[:space:]]*version:\).*/\1 $DEP_VERSION/" $chart/Chart.yaml || true
+            fi
+          done
+
+          CHART_NAME=$(grep '^name:' $chart/Chart.yaml | awk '{print $2}')
+          helm dependency update $chart
+          helm package $chart -d ./charts
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "helm push ./charts/${CHART_NAME}-${{ inputs.release-version }}.tgz oci://docker.io/${{ inputs.dh-username }}"
+          else
+            helm push ./charts/${CHART_NAME}-${{ inputs.release-version }}.tgz oci://docker.io/${{ inputs.dh-username }}
+          fi
+        done

@@ -1,0 +1,61 @@
+name: Publish pnpm libraries deployment
+description: Package and publish one or more Helm charts to Docker Hub OCI registry
+
+inputs:
+  release-version:
+    description: The version to set in package.json (e.g. 1.2.3)
+    required: true
+  npm-token:
+    description: NPM token for authentication
+    required: true
+  dry-run:
+    description: If true, only print commands instead of executing
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup node v22
+      if: inputs.dry-run != 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Corepack pnpm
+      if: inputs.dry-run != 'true'
+      run: corepack enable
+      shell: bash
+
+    - name: Install dependencies
+      if: inputs.dry-run != 'true'
+      run: pnpm install
+      shell: bash
+
+    - name: Set version for apps and packages
+      if: inputs.dry-run != 'true'
+      run: pnpm -r --topological version "${{ inputs.release-version }}"
+      shell: bash
+
+    - name: Publish NPM packages
+      if: inputs.dry-run != 'true'
+      env:
+        NPM_AUTH_TOKEN: ${{ inputs.npm-token }}
+      run: |
+        echo "//registry.npmjs.org/:_authToken=${NPM_AUTH_TOKEN}" > ~/.npmrc
+        pnpm config set npmAuthToken ${NPM_AUTH_TOKEN}
+        pnpm -r publish --no-git-checks --access public
+      shell: bash
+
+    # Dry-run mode
+    - name: Dry-run (print commands)
+      if: inputs.dry-run == 'true'
+      run: |
+        echo "Dry run mode enabled"
+        echo "Would run with release version: ${{ inputs.release-version }}"
+        echo "Commands that would be executed:"
+        echo "  corepack enable"
+        echo "  pnpm install"
+        echo "  pnpm -r --topological version \"${{ inputs.release-version }}\""
+        echo "  pnpm -r publish --no-git-checks --access public"
+      shell: bash
