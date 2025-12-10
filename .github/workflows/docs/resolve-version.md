@@ -114,7 +114,7 @@ The workflow exposes several outputs so that calling workflows can use versionin
 | Output Name             | Description                                                |
 | ----------------------- | ---------------------------------------------------------- |
 | `release-version`       | Resolved version string from the release system            |
-| `release-type`          | Type of release: `latest`, `dev`, or `none`                |
+| `release-type`          | Type of release: `stable`, `dev`, or `none`                |
 | `new-release-published` | Indicates whether a new release was successfully published |
 | `release-major`         | Major version component                                    |
 | `release-minor`         | Minor version component                                    |
