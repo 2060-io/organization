@@ -64,12 +64,6 @@ jobs:
           manifest-file: .release-please-manifest.json
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Debug Release Please outputs
-        continue-on-error: true
-        run: |
-          echo "Release outputs:"
-          echo "${{ toJson(steps.release-please.outputs) }}"
-
       - name: Fallback to Semantic Release (Dev)
         if: steps.release-please.outputs.release_created != 'true'
         uses: codfish/semantic-release-action@v3
