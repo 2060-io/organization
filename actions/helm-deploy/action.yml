@@ -1,12 +1,21 @@
 name: Helm Deploy 2060
 description: Detects changed charts and deploys using Helm with optional environment overrides
 inputs:
-  environment:
+  deployBranch:
     required: true
-    description: The deployment environment (e.g. dev, prod)
+    description: >
+      Target branch for the deployment.
+      Represents the environment being deployed (e.g. dev, main, prod).
+      This branch determines which base values are deployed.
   namespace:
     required: true
     description: The Kubernetes namespace to deploy into
+  sourceBranch:
+    required: false
+    description: >
+      Source branch used for comparison when deploying non-dev environments.
+      When set, the action detects changes between branches and enables
+      environment overrides (overridesDir). If empty, the action assumes a dev flow.
   valuesDir:
     required: true
     description: Path to the base values directory (e.g. values)
@@ -29,13 +38,14 @@ runs:
     - name: Validate required inputs
       shell: bash
       env:
-        ENVIRONMENT: ${{ inputs.environment }}
+        DEPLOY_BRANCH: ${{ inputs.deployBranch }}
+        SOURCE_BRANCH: ${{ inputs.sourceBranch }}
         NAMESPACE: ${{ inputs.namespace }}
         VALUES_DIR: ${{ inputs.valuesDir }}
         OVERRIDES_DIR: ${{ inputs.overridesDir }}
       run: |
         MISSING=()
-        [[ -z "$ENVIRONMENT" ]] && MISSING+=("environment")
+        [[ -z "$DEPLOY_BRANCH" ]] && MISSING+=("deployBranch")
         [[ -z "$NAMESPACE" ]] && MISSING+=("namespace")
         [[ -z "$VALUES_DIR" ]] && MISSING+=("valuesDir")
 
@@ -44,13 +54,8 @@ runs:
           exit 1
         fi
 
-        if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
-          echo "Invalid value for 'environment': '$ENVIRONMENT'. Must be 'dev' or 'prod'."
-          exit 1
-        fi
-
-        if [[ "$ENVIRONMENT" != "dev" && -z "$OVERRIDES_DIR" ]]; then
-          echo "'overridesDir' must be defined when environment is not 'dev'."
+        if [[ -n "$SOURCE_BRANCH" && -z "$OVERRIDES_DIR" ]]; then
+          echo "'overridesDir' must be defined and not empty when sourceBranch is set."
           exit 1
         fi
 
@@ -62,7 +67,7 @@ runs:
         if [[ "${{ inputs.release }}" != "" ]]; then
           FILES="${{ inputs.valuesDir }}/${{ inputs.release }}.yaml"
         else
-          if [[ "${{ inputs.environment }}" != "dev" ]]; then
+          if [[ "${{ inputs.sourceBranch }}" != "" ]]; then
             CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^${{ inputs.valuesDir }}/.*\.yaml|^${{ inputs.overridesDir }}/.*\.yaml' || true)
             BASENAMES=$(echo "$CHANGED_FILES" | sed -E "s@^(${{ inputs.valuesDir }}|${{ inputs.overridesDir }})/@@" | sed 's/\.yaml$//' | sort -u)
           else
@@ -93,8 +98,8 @@ runs:
           RELEASE=$(basename "$file" .yaml)
           echo "Deploying $RELEASE using $file"
 
-          CHART_SOURCE=$(yq e '.chartSource' "$file")
-          CHART_VERSION=$(yq e '.chartVersion' "$file")
+          CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
+          CHART_VERSION=$(yq e '.chartVersion // ""' "$file")
 
           if [[ -z "$CHART_SOURCE" ]]; then
             echo "Error: 'chartSource' is missing in $file"
@@ -107,11 +112,16 @@ runs:
 
           # If override file exists and overridesDir was provided
           OVERRIDE_ARG=""
-          if [[ "${{ inputs.environment }}" == "prod" && -n "${{ inputs.overridesDir }}" ]]; then
+          if [[ "${{ inputs.sourceBranch }}" != "" && -n "${{ inputs.overridesDir }}" ]]; then
             OVERRIDE_FILE="${{ inputs.overridesDir }}/$RELEASE.yaml"
             if [[ -f "$OVERRIDE_FILE" ]]; then
               echo "Override file found: $OVERRIDE_FILE"
               OVERRIDE_ARG="-f $OVERRIDE_FILE"
+              OVERRIDE_CHART_SOURCE=$(yq e '.chartSource // ""' "$OVERRIDE_FILE")
+              OVERRIDE_CHART_VERSION=$(yq e '.chartVersion // ""' "$OVERRIDE_FILE")
+
+              [[ -n "$OVERRIDE_CHART_SOURCE" ]] && CHART_SOURCE="$OVERRIDE_CHART_SOURCE"
+              [[ -n "$OVERRIDE_CHART_VERSION" ]] && CHART_VERSION="$OVERRIDE_CHART_VERSION"
             fi
           fi
 
@@ -124,7 +134,7 @@ runs:
 
           # Search chartSecrets on yaml file and replace it with --set
           SECRET_ARGS=""
-          SECRET_COUNT=$(yq e '.chartSecrets | length' "$file")
+          SECRET_COUNT=$(yq e '.chartSecrets // [] | length' "$file")
           if [[ "$SECRET_COUNT" -gt 0 ]]; then
             echo "Processing $SECRET_COUNT secrets from $file"
             for i in $(seq 0 $((SECRET_COUNT - 1))); do
@@ -139,7 +149,7 @@ runs:
               echo "Mapping secret $SECRET_NAME to path $SECRET_PATH"
               SECRET_VALUE=$(printenv "$SECRET_NAME")
               if [[ -z "$SECRET_VALUE" ]]; then
-                echo "Secret $SECRET_NAME not found in environment variables"
+                echo "Secret $SECRET_NAME not found in deployBranch variables"
                 exit 1
               fi
 
