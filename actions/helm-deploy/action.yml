@@ -153,7 +153,7 @@ runs:
         CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
         RELEASE_NAME=$(basename "${{ inputs.release }}" | sed -E 's/\.ya?ml$//')
         CLUSTER_COUNT=$(yq e '.clusters | length' $MANIFEST)
-        FILES="${{ steps.changed_files.outputs.changed }}"
+        FILE="${{ steps.changed_files.outputs.changed }}"
 
         for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
           PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
