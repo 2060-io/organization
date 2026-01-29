@@ -1,4 +1,4 @@
-name: Helm Deploy 2060
+name: Helm Deploy
 description: Detects changed charts and deploys using Helm with optional environment overrides
 inputs:
   directory:
