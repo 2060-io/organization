@@ -152,6 +152,7 @@ runs:
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
         CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
         RELEASE_NAME=$(basename "${{ inputs.release }}" | sed -E 's/\.ya?ml$//')
+        CLUSTER_COUNT=$(yq e '.clusters | length' $MANIFEST)
 
         for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
           PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
