@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-MISSING=()
+echo "[DEBUG] Arguments received: $@"
+echo "[DEBUG] Number of arguments: $#"
 
+MISSING=()
 for VAR_NAME in "$@"; do
+  echo "[DEBUG] Checking variable: $VAR_NAME"
   VALUE="${!VAR_NAME:-}"
+  echo "[DEBUG] Value of $VAR_NAME: '$VALUE'"
+  
   if [[ -z "$VALUE" ]]; then
     MISSING+=("$VAR_NAME")
   fi
