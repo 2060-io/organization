@@ -78,7 +78,7 @@ runs:
         for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
           CLUSTER_NAME=$(yq e ".clusters[$i].name" $MANIFEST)
           PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
-          KUBECONFIG=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
+          KUBECONFIG_SECRET=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
 
           echo "=============================="
           echo "Processing cluster: $CLUSTER_NAME"
@@ -90,7 +90,8 @@ runs:
             continue
           fi
 
-          $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$KUBECONFIG"
+          echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
+          export KUBECONFIG=$PWD/kubeconfig.yaml
           echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
           while read -r file; do
@@ -98,9 +99,6 @@ runs:
 
             RELEASE=$(basename "$file" | sed -E 's/\.ya?ml$//')
             echo "Deploying $RELEASE in cluster $CLUSTER_NAME using $file"
-            echo "[DEBUG] ========== Content of $file =========="
-            cat "$file"
-            echo "[DEBUG] ======================================="
 
             CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
             CHART_VERSION=$(yq e '.chartVersion // ""' "$file")
@@ -154,12 +152,15 @@ runs:
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
         CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
         RELEASE_NAME=$(basename "${{ inputs.release }}" | sed -E 's/\.ya?ml$//')
+        KUBECONFIG=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
 
         echo "=============================="
         echo "Processing cluster: $CLUSTER_NAME"
         echo "Pattern: $PATTERN"
 
-        $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
+        echo "${!KUBECONFIG}" > kubeconfig.yaml
+        export KUBECONFIG=$PWD/kubeconfig.yaml
+        echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
         CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
         if [[ -z "$CHART_NAMESPACE" ]]; then
