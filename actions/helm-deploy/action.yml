@@ -152,23 +152,32 @@ runs:
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
         CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
         RELEASE_NAME=$(basename "${{ inputs.release }}" | sed -E 's/\.ya?ml$//')
-        KUBECONFIG_SECRET=$(yq -r '.clusters[] | select(.name == "'"$CLUSTER_NAME"'") | .kubeconfigSecret' "$MANIFEST")
 
-        echo "=============================="
-        echo "Processing cluster: $CLUSTER_NAME"
-        echo "Pattern: $PATTERN"
+        for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
+          PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
+          KUBECONFIG_SECRET=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
 
-        echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
-        export KUBECONFIG=$PWD/kubeconfig.yaml
-        echo "Using kubeconfig for cluster: $CLUSTER_NAME"
+          echo "=============================="
+          echo "Processing cluster: $CLUSTER_NAME"
+          echo "Pattern: $PATTERN"
+          if ! [[ "$CLUSTER_NAME" =~ $PATTERN ]]; then
+            echo "Pattern does not match, skipping"
+            continue
+          fi
 
-        CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
-        if [[ -z "$CHART_NAMESPACE" ]]; then
-          echo "::error file=$file::Missing chartNamespace"
-          exit 1
-        fi
+          echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
+          export KUBECONFIG=$PWD/kubeconfig.yaml
+          echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
-        echo "Uninstalling release '$RELEASE_NAME' from cluster '$CLUSTER_NAME'"
-        helm uninstall "$RELEASE_NAME" \
-          --namespace "$CHART_NAMESPACE" \
-          $DRY_RUN_FLAG || echo "Release not found or already removed"
+          CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
+          if [[ -z "$CHART_NAMESPACE" ]]; then
+            echo "::error file=$file::Missing chartNamespace"
+            exit 1
+          fi
+
+          echo "Uninstalling release '$RELEASE_NAME' from cluster '$CLUSTER_NAME'"
+          helm uninstall "$RELEASE_NAME" \
+            --namespace "$CHART_NAMESPACE" \
+            $DRY_RUN_FLAG || echo "Release not found or already removed"
+        done
+
