@@ -2,7 +2,6 @@
 set -e
 
 echo "[DEBUG] setup-kubeconfig.sh: start"
-
 MANIFEST="$1"
 CLUSTER_NAME="$2"
 
@@ -13,7 +12,7 @@ KUBECONFIG_SECRET=$(yq e ".clusters[$CLUSTER_INDEX].kubeconfigSecret" "$MANIFEST
 KUBECONFIG_VALUE="${!KUBECONFIG_SECRET:-}"
 [ -z "$KUBECONFIG_VALUE" ] && echo "::error::Missing kubeconfig" && exit 1
 
-KUBECONFIG_PATH="$RUNNER_TEMP/kubeconfig-$CLUSTER_NAME"
+KUBECONFIG_PATH="$RUNNER_TEMP/kubeconfig"
 echo "$KUBECONFIG_VALUE" > "$KUBECONFIG_PATH"
 chmod 600 "$KUBECONFIG_PATH"
 
