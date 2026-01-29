@@ -78,6 +78,7 @@ runs:
         for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
           CLUSTER_NAME=$(yq e ".clusters[$i].name" $MANIFEST)
           PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
+          KUBECONFIG=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
 
           echo "=============================="
           echo "Processing cluster: $CLUSTER_NAME"
@@ -89,7 +90,7 @@ runs:
             continue
           fi
 
-          $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
+          $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$KUBECONFIG"
           echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
           while read -r file; do

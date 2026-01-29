@@ -2,18 +2,9 @@
 set -e
 
 echo "[DEBUG] setup-kubeconfig.sh: start"
-MANIFEST="$1"
-CLUSTER_NAME="$2"
+KUBECONFIG="$1"
 
-echo "[DEBUG] CLUSTER_NAME: '$CLUSTER_NAME'"
-echo "[DEBUG] MANIFEST: '$MANIFEST'"
-CLUSTER_INDEX=$(yq e ".clusters | to_entries | .[] | select(.value.name == \"$CLUSTER_NAME\") | .key" "$MANIFEST")
-[ "$CLUSTER_INDEX" = "null" ] && echo "::error::Cluster not found" && exit 1
-echo "[DEBUG] CLUSTER_INDEX: $CLUSTER_INDEX"
-
-KUBECONFIG_SECRET=$(yq e ".clusters[$CLUSTER_INDEX].kubeconfigSecret" "$MANIFEST")
-echo "[DEBUG] KUBECONFIG_SECRET: $KUBECONFIG_SECRET"
-KUBECONFIG_VALUE="${!KUBECONFIG_SECRET:-}"
+KUBECONFIG_VALUE="${!KUBECONFIG:-}"
 [ -z "$KUBECONFIG_VALUE" ] && echo "::error::Missing kubeconfig" && exit 1
 
 KUBECONFIG_PATH="$RUNNER_TEMP/kubeconfig"
