@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+echo "[DEBUG] setup-kubeconfig.sh: start"
+
 MANIFEST="$1"
 CLUSTER_NAME="$2"
 
