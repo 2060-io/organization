@@ -139,12 +139,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Helm Deploy
         uses: 2060-io/organization/actions/helm-deploy@v1.0.0
-          with:
-            directory: charts
-            manifest: clusters.yml
-          env:
-            DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-            API_KEY: ${{ secrets.API_KEY }}
+        with:
+          directory: charts
+          manifest: clusters.yml
+        env:
+          DEV_KUBECONFIG: ${{ secrets.DEV_KUBECONFIG }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          API_KEY: ${{ secrets.API_KEY }}
 ```
 
 #### Manual install
@@ -175,14 +176,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Helm Deploy
         uses: 2060-io/organization/actions/helm-deploy@v1.0.0
-          with:
-            directory: charts
-            manifest: clusters.yml
-            release: ${{ inputs.release }}
-            dryRun: ${{ inputs.dryRun }}
-          env:
-            DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-            API_KEY: ${{ secrets.API_KEY }}
+        with:
+          directory: charts
+          manifest: clusters.yml
+          release: ${{ inputs.release }}
+          dryRun: ${{ inputs.dryRun }}
+        env:
+          DEV_KUBECONFIG: ${{ secrets.DEV_KUBECONFIG }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          API_KEY: ${{ secrets.API_KEY }}
 ```
 
 #### Manual uninstall
@@ -212,15 +214,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Helm Deploy
         uses: 2060-io/organization/actions/helm-deploy@v1.0.0
-          with:
-            directory: charts
-            manifest: clusters.yml
-            release: ${{ inputs.release }}
-            uninstall: true
-            dryRun: ${{ inputs.dryRun }}
-          env:
-            DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-            API_KEY: ${{ secrets.API_KEY }}
+        with:
+          directory: charts
+          manifest: clusters.yml
+          release: ${{ inputs.release }}
+          uninstall: true
+          dryRun: ${{ inputs.dryRun }}
+        env:
+          DEV_KUBECONFIG: ${{ secrets.DEV_KUBECONFIG }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          API_KEY: ${{ secrets.API_KEY }}
 ```
 
 Manual workflows should be protected using GitHub Environments.

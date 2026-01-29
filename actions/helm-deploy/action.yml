@@ -47,7 +47,7 @@ runs:
         git fetch origin main
 
         if [[ "${{ inputs.release }}" != "" ]]; then
-          FILES="${{ inputs.directory }}/${{ inputs.release }}.yaml"
+          FILES="${{ inputs.release }}.yaml"
         else
           FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
           | grep -E "^${{ inputs.directory }}/.*\.(yml|yaml)$" || true)
