@@ -47,7 +47,7 @@ runs:
         git fetch origin main
 
         if [[ "${{ inputs.release }}" != "" ]]; then
-          FILES="${{ inputs.release }}.yaml"
+          FILES=$(ls "${{ inputs.release }}".yml "${{ inputs.release }}".yaml 2>/dev/null || true)
         else
           FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
           | grep -E "^${{ inputs.directory }}/.*\.(yml|yaml)$" || true)
@@ -93,7 +93,7 @@ runs:
           while read -r file; do
             [ -z "$file" ] && continue
 
-            RELEASE=$(basename "$file" .yaml)
+            RELEASE=$(basename "$file" | sed -E 's/\.ya?ml$//')
             echo "Deploying $RELEASE in cluster $CLUSTER_NAME using $file"
 
             CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
@@ -143,8 +143,8 @@ runs:
         DRY_RUN_FLAG=$(./scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
 
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
-        CLUSTER_NAME="$(dirname "${{ inputs.release }}" | xargs basename)"
-        RELEASE_NAME="$(basename "${{ inputs.release }}" .yaml)"
+        CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
+        RELEASE_NAME=$(basename "${{ inputs.release }}" | sed -E 's/\.ya?ml$//')
 
         echo "=============================="
         echo "Processing cluster: $CLUSTER_NAME"
