@@ -67,7 +67,7 @@ runs:
       if: ${{ inputs.uninstall != 'true' }}
       shell: bash
       run: |
-        DRY_RUN_FLAG=$(./scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
+        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
 
         CHANGED_FILES="${{ steps.changed_files.outputs.changed }}"
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
@@ -87,7 +87,7 @@ runs:
             continue
           fi
 
-          ./scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
+          $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
           echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
           while read -r file; do
@@ -99,7 +99,7 @@ runs:
             CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
             CHART_VERSION=$(yq e '.chartVersion // ""' "$file")
             CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$file")
-            ./scripts/validate-env-vars.sh CHART_SOURCE CHART_VERSION CHART_NAMESPACE
+            $GITHUB_ACTION_PATH/scripts/validate-env-vars.sh CHART_SOURCE CHART_VERSION CHART_NAMESPACE
 
             # Search chartSecrets on yaml file and replace it with --set
             SECRET_ARGS=""
@@ -140,7 +140,7 @@ runs:
       if: ${{ inputs.uninstall == 'true' && inputs.release != '' }}
       shell: bash
       run: |
-        DRY_RUN_FLAG=$(./scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
+        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
 
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
         CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
@@ -150,10 +150,10 @@ runs:
         echo "Processing cluster: $CLUSTER_NAME"
         echo "Pattern: $PATTERN"
 
-        ./scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
+        $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
 
         CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
-        ./scripts/validate-env-vars.sh CHART_NAMESPACE
+        $GITHUB_ACTION_PATH/scripts/validate-env-vars.sh CHART_NAMESPACE
 
         echo "Uninstalling release '$RELEASE_NAME' from cluster '$CLUSTER_NAME'"
         helm uninstall "$RELEASE_NAME" \
