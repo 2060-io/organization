@@ -98,6 +98,9 @@ runs:
 
             RELEASE=$(basename "$file" | sed -E 's/\.ya?ml$//')
             echo "Deploying $RELEASE in cluster $CLUSTER_NAME using $file"
+            echo "[DEBUG] ========== Content of $file =========="
+            cat "$file"
+            echo "[DEBUG] ======================================="
 
             CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
             CHART_VERSION=$(yq e '.chartVersion // ""' "$file")
