@@ -47,7 +47,9 @@ runs:
         git fetch origin main
 
         if [[ "${{ inputs.release }}" != "" ]]; then
-          FILES=$(ls "${{ inputs.release }}".yml "${{ inputs.release }}".yaml 2>/dev/null || true)
+          FILES=$(ls "${{ inputs.directory }}/${{ inputs.release }}".yml \
+            "${{ inputs.directory }}/${{ inputs.release }}".yaml \
+            2>/dev/null || true)
         else
           FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
           | grep -E "^${{ inputs.directory }}/.*\.(yml|yaml)$" || true)
