@@ -160,8 +160,10 @@ runs:
           echo "=============================="
           echo "Processing cluster: $CLUSTER_NAME"
           echo "Pattern: $PATTERN"
-          if ! [[ "$CLUSTER_NAME" =~ $PATTERN ]]; then
-            echo "Pattern does not match, skipping"
+
+          MATCHED_FILES=$(echo "$CLUSTER_NAME" | grep -F "$PATTERN" || true)
+          if [ -z "$MATCHED_FILES" ]; then
+            echo "No changes for cluster $CLUSTER_NAME"
             continue
           fi
 
