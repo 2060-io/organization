@@ -105,7 +105,10 @@ runs:
             CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
             CHART_VERSION=$(yq e '.chartVersion // ""' "$file")
             CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$file")
-            $GITHUB_ACTION_PATH/scripts/validate-env-vars.sh CHART_SOURCE CHART_VERSION CHART_NAMESPACE
+            if [[ -z "$CHART_SOURCE" || -z "$CHART_VERSION" || -z "$CHART_NAMESPACE" ]]; then
+              echo "::error file=$file::Missing chartSource/chartVersion/chartNamespace"
+              exit 1
+            fi
 
             # Search chartSecrets on yaml file and replace it with --set
             SECRET_ARGS=""
@@ -159,7 +162,10 @@ runs:
         $GITHUB_ACTION_PATH/scripts/setup-kubeconfig.sh "$MANIFEST" "$CLUSTER_NAME"
 
         CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
-        $GITHUB_ACTION_PATH/scripts/validate-env-vars.sh CHART_NAMESPACE
+        if [[ -z "$CHART_NAMESPACE" ]]; then
+          echo "::error file=$file::Missing chartNamespace"
+          exit 1
+        fi
 
         echo "Uninstalling release '$RELEASE_NAME' from cluster '$CLUSTER_NAME'"
         helm uninstall "$RELEASE_NAME" \
