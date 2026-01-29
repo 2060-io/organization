@@ -58,8 +58,10 @@ Example:
 clusters:
   - name: devnet
     pattern: devnet
+    kubeconfigSecret: DEV_KUBECONFIG
   - name: testnet
     pattern: testnet
+    kubeconfigSecret: DEV_KUBECONFIG
 ```
 
 When a configuration file matching a pattern is modified, the release is deployed to the corresponding cluster.
