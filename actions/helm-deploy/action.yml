@@ -1,24 +1,20 @@
-name: Helm Deploy 2060
+name: Helm Deploy
 description: Detects changed charts and deploys using Helm with optional environment overrides
 inputs:
-  environment:
+  directory:
     required: true
-    description: The deployment environment (e.g. dev, prod)
-  namespace:
-    required: true
-    description: The Kubernetes namespace to deploy into
-  valuesDir:
-    required: true
-    description: Path to the base values directory (e.g. values)
-  overridesDir:
+    description: Path to the base directory (e.g. charts)
+  manifest:
     required: false
-    description: Path to the overrides directory (e.g. pro). Only used in prod
-  domain:
-    required: false
-    description: The global domain to set as --set global.domain
+    default: "clusters.yml"
+    description: yaml manifest file defining clusters and their patterns (by default clusters.yml)
   release:
     required: false
     description: Optional release name to deploy directly
+  uninstall:
+    required: false
+    type: boolean
+    description: Optional release name to uninstall directly
   dryRun:
     required: false
     description: If true, performs a dry-run of the deployment
@@ -28,133 +24,162 @@ runs:
   steps:
     - name: Validate required inputs
       shell: bash
-      env:
-        ENVIRONMENT: ${{ inputs.environment }}
-        NAMESPACE: ${{ inputs.namespace }}
-        VALUES_DIR: ${{ inputs.valuesDir }}
-        OVERRIDES_DIR: ${{ inputs.overridesDir }}
       run: |
-        MISSING=()
-        [[ -z "$ENVIRONMENT" ]] && MISSING+=("environment")
-        [[ -z "$NAMESPACE" ]] && MISSING+=("namespace")
-        [[ -z "$VALUES_DIR" ]] && MISSING+=("valuesDir")
-
-        if [[ ${#MISSING[@]} -ne 0 ]]; then
-          echo "Missing required input(s): ${MISSING[*]}"
+        if [ ! -d "${{ inputs.directory }}" ]; then
+          echo "Directory ${{ inputs.directory }} does not exist"
           exit 1
         fi
 
-        if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
-          echo "Invalid value for 'environment': '$ENVIRONMENT'. Must be 'dev' or 'prod'."
+        if [ ! -f "${{ inputs.manifest }}" ]; then
+          echo "::error::Manifest file '${{ inputs.manifest }}' not found"
           exit 1
         fi
-
-        if [[ "$ENVIRONMENT" != "dev" && -z "$OVERRIDES_DIR" ]]; then
-          echo "'overridesDir' must be defined when environment is not 'dev'."
-          exit 1
-        fi
-
-
-    - name: Detect changed value files
-      id: changed_files
-      shell: bash
-      run: |
-        if [[ "${{ inputs.release }}" != "" ]]; then
-          FILES="${{ inputs.valuesDir }}/${{ inputs.release }}.yaml"
-        else
-          if [[ "${{ inputs.environment }}" != "dev" ]]; then
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^${{ inputs.valuesDir }}/.*\.yaml|^${{ inputs.overridesDir }}/.*\.yaml' || true)
-            BASENAMES=$(echo "$CHANGED_FILES" | sed -E "s@^(${{ inputs.valuesDir }}|${{ inputs.overridesDir }})/@@" | sed 's/\.yaml$//' | sort -u)
-          else
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^${{ inputs.valuesDir }}/.*\.yaml' || true)
-            BASENAMES=$(echo "$CHANGED_FILES" | sed -E "s@^${{ inputs.valuesDir }}/@@" | sed 's/\.yaml$//' | sort -u)
-          fi
-          FILES=$(for base in $BASENAMES; do echo "${{ inputs.valuesDir }}/$base.yaml"; done | paste -sd ',' -)
-        fi
-        echo "files=$FILES" >> $GITHUB_OUTPUT
 
     - name: Install yq
       uses: Makepad-fr/setup-yq-action@main
       with:
         version: '4.6.0'
 
-    - name: Deploy charts using Helm
-      if: steps.changed_files.outputs.files != ''
+    - name: Detect changed value files
+      id: changed_files
       shell: bash
       run: |
-        DRY_RUN_FLAG=""
-        if [[ "${{ inputs.dryRun }}" == "true" ]]; then
-          echo "Dry-run mode enabled. Validating Helm chart for $RELEASE"
-          DRY_RUN_FLAG="--dry-run --debug"
+        git fetch origin main
+
+        if [[ "${{ inputs.release }}" != "" ]]; then
+          FILES=$(ls "${{ inputs.directory }}/${{ inputs.release }}".yml \
+            "${{ inputs.directory }}/${{ inputs.release }}".yaml \
+            2>/dev/null || true)
+        else
+          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+          | grep -E "^${{ inputs.directory }}/.*\.(yml|yaml)$" || true)
         fi
 
-        IFS=',' read -ra FILES <<< "${{ steps.changed_files.outputs.files }}"
-        for file in "${FILES[@]}"; do
-          RELEASE=$(basename "$file" .yaml)
-          echo "Deploying $RELEASE using $file"
+        if [ -z "$FILES" ]; then
+          echo "No environment changes detected"
+          exit 0
+        fi
 
-          CHART_SOURCE=$(yq e '.chartSource' "$file")
-          CHART_VERSION=$(yq e '.chartVersion' "$file")
+        echo "changed<<EOF" >> $GITHUB_OUTPUT
+        echo "$FILES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
-          if [[ -z "$CHART_SOURCE" ]]; then
-            echo "Error: 'chartSource' is missing in $file"
-            exit 1
+    - name: Extract chart info per changed env
+      id: chart_info
+      if: ${{ inputs.uninstall != 'true' }}
+      shell: bash
+      run: |
+        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
+
+        CHANGED_FILES="${{ steps.changed_files.outputs.changed }}"
+        MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
+        CLUSTER_COUNT=$(yq e '.clusters | length' $MANIFEST)
+
+        for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
+          CLUSTER_NAME=$(yq e ".clusters[$i].name" $MANIFEST)
+          PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
+          KUBECONFIG_SECRET=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
+
+          echo "=============================="
+          echo "Processing cluster: $CLUSTER_NAME"
+          echo "Pattern: $PATTERN"
+
+          MATCHED_FILES=$(echo "$CHANGED_FILES" | grep "$PATTERN" || true)
+          if [ -z "$MATCHED_FILES" ]; then
+            echo "No changes for cluster $CLUSTER_NAME"
+            continue
           fi
-          if [[ -z "$CHART_VERSION" ]]; then
-            echo "Error: 'chartVersion' is missing in $file"
-            exit 1
-          fi
 
-          # If override file exists and overridesDir was provided
-          OVERRIDE_ARG=""
-          if [[ "${{ inputs.environment }}" == "prod" && -n "${{ inputs.overridesDir }}" ]]; then
-            OVERRIDE_FILE="${{ inputs.overridesDir }}/$RELEASE.yaml"
-            if [[ -f "$OVERRIDE_FILE" ]]; then
-              echo "Override file found: $OVERRIDE_FILE"
-              OVERRIDE_ARG="-f $OVERRIDE_FILE"
+          echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
+          export KUBECONFIG=$PWD/kubeconfig.yaml
+          echo "Using kubeconfig for cluster: $CLUSTER_NAME"
+
+          while read -r file; do
+            [ -z "$file" ] && continue
+
+            RELEASE=$(basename "$file" | sed -E 's/\.ya?ml$//')
+            echo "Deploying $RELEASE in cluster $CLUSTER_NAME using $file"
+
+            CHART_SOURCE=$(yq e '.chartSource // ""' "$file")
+            CHART_VERSION=$(yq e '.chartVersion // ""' "$file")
+            CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$file")
+            if [[ -z "$CHART_SOURCE" || -z "$CHART_VERSION" || -z "$CHART_NAMESPACE" ]]; then
+              echo "::error file=$file::Missing chartSource/chartVersion/chartNamespace"
+              exit 1
             fi
-          fi
 
-          if [ "${{ inputs.domain }}" != "" ]; then
-            DOMAIN_ARG="--set global.domain=${{ inputs.domain }}"
-          else
-            DOMAIN_ARG=""
-            echo "No domain provided. Skipping --set global.domain"
-          fi
+            # Search chartSecrets on yaml file and replace it with --set
+            SECRET_ARGS=""
+            SECRET_COUNT=$(yq e '.chartSecrets // [] | length' "$file")
+            if [[ "$SECRET_COUNT" -gt 0 ]]; then
+              echo "Processing $SECRET_COUNT secrets from $file"
+              for i in $(seq 0 $((SECRET_COUNT - 1))); do
+                SECRET_NAME=$(yq e ".chartSecrets[$i].name" "$file")
+                SECRET_PATH=$(yq e ".chartSecrets[$i].path" "$file")
 
-          # Search chartSecrets on yaml file and replace it with --set
-          SECRET_ARGS=""
-          SECRET_COUNT=$(yq e '.chartSecrets | length' "$file")
-          if [[ "$SECRET_COUNT" -gt 0 ]]; then
-            echo "Processing $SECRET_COUNT secrets from $file"
-            for i in $(seq 0 $((SECRET_COUNT - 1))); do
-              SECRET_NAME=$(yq e ".chartSecrets[$i].name" "$file")
-              SECRET_PATH=$(yq e ".chartSecrets[$i].path" "$file")
+                if [[ -z "$SECRET_NAME" || -z "$SECRET_PATH" ]]; then
+                  echo "Invalid secret entry in $file (index $i)"
+                  exit 1
+                fi
 
-              if [[ -z "$SECRET_NAME" || -z "$SECRET_PATH" ]]; then
-                echo "Invalid secret entry in $file (index $i)"
-                exit 1
-              fi
+                echo "Mapping secret $SECRET_NAME to path $SECRET_PATH"
+                SECRET_VALUE=$(printenv "$SECRET_NAME")
+                if [[ -z "$SECRET_VALUE" ]]; then
+                  echo "Secret $SECRET_NAME not found in environment variables"
+                  exit 1
+                fi
 
-              echo "Mapping secret $SECRET_NAME to path $SECRET_PATH"
-              SECRET_VALUE=$(printenv "$SECRET_NAME")
-              if [[ -z "$SECRET_VALUE" ]]; then
-                echo "Secret $SECRET_NAME not found in environment variables"
-                exit 1
-              fi
+                SECRET_ARGS="$SECRET_ARGS --set $SECRET_PATH=$SECRET_VALUE"
+              done
+            fi
 
-              SECRET_ARGS="$SECRET_ARGS --set $SECRET_PATH=$SECRET_VALUE"
-            done
-          fi
+            helm upgrade --install "$RELEASE" "$CHART_SOURCE" \
+              --version "$CHART_VERSION" \
+              -f "$file" \
+              --namespace "$CHART_NAMESPACE" \
+              --create-namespace \
+              $DRY_RUN_FLAG
 
-          echo "Installing chart from: $CHART_SOURCE"
-          helm upgrade --install "$RELEASE" "$CHART_SOURCE" \
-            --version "$CHART_VERSION" \
-            -f "$file" \
-            $OVERRIDE_ARG \
-            $DOMAIN_ARG \
-            $SECRET_ARGS \
-            --namespace "${{ inputs.namespace }}" \
-            --create-namespace \
-            $DRY_RUN_FLAG
+          done <<< "$MATCHED_FILES"
         done
+
+    - name: Uninstall release
+      if: ${{ inputs.uninstall == 'true' && inputs.release != '' }}
+      shell: bash
+      run: |
+        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
+
+        MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
+        CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
+        RELEASE_NAME=$(basename "${{ inputs.release }}" | sed -E 's/\.ya?ml$//')
+        CLUSTER_COUNT=$(yq e '.clusters | length' $MANIFEST)
+        FILE="${{ steps.changed_files.outputs.changed }}"
+
+        for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
+          PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
+          KUBECONFIG_SECRET=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
+
+          echo "=============================="
+          echo "Processing Pattern: $PATTERN"
+
+          if ! echo "$CLUSTER_NAME" | grep -q "$PATTERN"; then
+            echo "No changes for cluster $PATTERN"
+            continue
+          fi
+
+          echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
+          export KUBECONFIG=$PWD/kubeconfig.yaml
+          echo "Using kubeconfig for cluster: $CLUSTER_NAME"
+
+          CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
+          if [[ -z "$CHART_NAMESPACE" ]]; then
+            echo "::error file=$file::Missing chartNamespace"
+            exit 1
+          fi
+
+          echo "Uninstalling release '$RELEASE_NAME' from cluster '$CLUSTER_NAME'"
+          helm uninstall "$RELEASE_NAME" \
+            --namespace "$CHART_NAMESPACE" \
+            $DRY_RUN_FLAG || echo "Release not found or already removed"
+        done
+
