@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/2060-io/organization/compare/v0.2.0...v0.3.0) (2026-01-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* new cd helm action ([#29](https://github.com/2060-io/organization/issues/29))
+
+### Features
+
+* new cd helm action ([#29](https://github.com/2060-io/organization/issues/29)) ([96a4004](https://github.com/2060-io/organization/commit/96a400466ac5754468a01eea8045363567e9338d))
+
 ## [0.2.0](https://github.com/2060-io/organization/compare/v0.1.0...v0.2.0) (2026-01-22)
 
 
