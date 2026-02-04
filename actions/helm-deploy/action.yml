@@ -8,6 +8,10 @@ inputs:
     required: false
     default: "clusters.yml"
     description: yaml manifest file defining clusters and their patterns (by default clusters.yml)
+  deployLabel:
+    required: false
+    default: "verana-deploy"
+    description: Labels to control deployments
   release:
     required: false
     description: Optional release name to deploy directly
@@ -136,7 +140,7 @@ runs:
             helm upgrade --install "$RELEASE" "$CHART_SOURCE" \
               --version "$CHART_VERSION" \
               -f "$file" \
-              --labels managed_by=verana-deploy \
+              --labels managed_by=${{ inputs.deployLabel}} \
               --namespace "$CHART_NAMESPACE" \
               --create-namespace \
               $DRY_RUN_FLAG
