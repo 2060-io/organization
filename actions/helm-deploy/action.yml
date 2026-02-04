@@ -136,6 +136,7 @@ runs:
             helm upgrade --install "$RELEASE" "$CHART_SOURCE" \
               --version "$CHART_VERSION" \
               -f "$file" \
+              --labels managed_by=verana-deploy
               --namespace "$CHART_NAMESPACE" \
               --create-namespace \
               $DRY_RUN_FLAG
