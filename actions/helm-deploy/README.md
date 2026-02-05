@@ -38,13 +38,17 @@ The action assumes that any change merged into `main` has already been authorize
 
 ### Inputs
 
-| Input       | Required | Description                                                                            |
-| ----------- | -------- | -------------------------------------------------------------------------------------- |
-| `directory` | Yes      | Base directory containing environment or release configuration files (e.g. `charts/`). |
-| `manifest`  | No       | Cluster manifest file defining clusters and path patterns. Defaults to `clusters.yml`. |
-| `release`   | No       | Deploy or uninstall a specific release directly, bypassing change detection.           |
-| `uninstall` | No       | When set to `true`, performs a Helm uninstall instead of a deploy.                     |
-| `dryRun`    | No       | When `true`, executes Helm commands in dry-run mode.                                   |
+| Input           | Required | Description                                                                                |
+| --------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `directory`     | Yes      | Base directory containing Helm charts or environment configuration files (e.g. `charts/`). |
+| `manifest`      | No       | YAML manifest file defining clusters and their path patterns. Defaults to `clusters.yml`.  |
+| `deploy-labels` | No       | Labels applied to the Helm release. Format: `key=value,key2=value2`.                       |
+| `release`       | No       | Deploy or uninstall a specific release directly, bypassing change detection.               |
+| `uninstall`     | No       | When set to `true`, performs a Helm uninstall instead of a deploy.                         |
+| `dry-run`       | No       | When `true`, executes Helm commands in dry-run mode.                                       |
+
+> **Note:** The following label keys are reserved and must not be used in `deploy-labels`, as they are managed internally by Helm:  
+> `name`, `owner`, `status`, `version`, `createdAt`, `modifiedAt`
 
 ---
 
