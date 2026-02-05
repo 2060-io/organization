@@ -8,10 +8,9 @@ inputs:
     required: false
     default: "clusters.yml"
     description: yaml manifest file defining clusters and their patterns (by default clusters.yml)
-  deployLabel:
+  deploy-labels:
     required: false
-    default: "verana-deploy"
-    description: Labels to control deployments
+    description: Labels applied to the Helm release (key=value,key2=value2)
   release:
     required: false
     description: Optional release name to deploy directly
@@ -19,7 +18,7 @@ inputs:
     required: false
     type: boolean
     description: Optional release name to uninstall directly
-  dryRun:
+  dry-run:
     required: false
     description: If true, performs a dry-run of the deployment
     default: 'false'
@@ -73,7 +72,7 @@ runs:
       if: ${{ inputs.uninstall != 'true' }}
       shell: bash
       run: |
-        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
+        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dry-run }}")
 
         CHANGED_FILES="${{ steps.changed_files.outputs.changed }}"
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
@@ -136,11 +135,15 @@ runs:
                 SECRET_ARGS="$SECRET_ARGS --set $SECRET_PATH=$SECRET_VALUE"
               done
             fi
+            LABELS_ARG=""
+            if [[ -n "${{ inputs.deploy-labels }}" ]]; then
+              LABELS_ARG="--labels ${{ inputs.deploy-labels }}"
+            fi
 
             helm upgrade --install "$RELEASE" "$CHART_SOURCE" \
               --version "$CHART_VERSION" \
               -f "$file" \
-              --labels managed_by=${{ inputs.deployLabel}} \
+              $LABELS_ARG \
               --namespace "$CHART_NAMESPACE" \
               --create-namespace \
               $DRY_RUN_FLAG
@@ -152,7 +155,7 @@ runs:
       if: ${{ inputs.uninstall == 'true' && inputs.release != '' }}
       shell: bash
       run: |
-        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dryRun }}")
+        DRY_RUN_FLAG=$($GITHUB_ACTION_PATH/scripts/dry-run-flag.sh "${{ inputs.dry-run }}")
 
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
         CLUSTER_NAME=$(dirname "${{ inputs.release }}" | xargs basename)
