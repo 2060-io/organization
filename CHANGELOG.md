@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/2060-io/organization/compare/v0.3.0...v0.3.1) (2026-02-05)
+
+
+### Bug Fixes
+
+* label verana deploy ([#31](https://github.com/2060-io/organization/issues/31)) ([b2c1649](https://github.com/2060-io/organization/commit/b2c1649d1934b494a48bcca7d7200bf306a685ab))
+
 ## [0.3.0](https://github.com/2060-io/organization/compare/v0.2.0...v0.3.0) (2026-01-30)
 
 
