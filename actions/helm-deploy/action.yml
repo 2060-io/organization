@@ -11,6 +11,9 @@ inputs:
   deploy-labels:
     required: false
     description: Labels applied to the Helm release (key=value,key2=value2)
+  environment:
+    required: false
+    description: Current environment being deployed (to filter clusters)
   release:
     required: false
     description: Optional release name to deploy directly
@@ -78,6 +81,16 @@ runs:
         MANIFEST="$GITHUB_WORKSPACE/${{ inputs.manifest }}"
         CLUSTER_COUNT=$(yq e '.clusters | length' $MANIFEST)
 
+        if [[ -n "${{ inputs.environment }}" ]]; then
+          echo "=============================="
+          echo "Filtering by environment: ${{ inputs.environment }}"
+          echo "=============================="
+        else
+          echo "=============================="
+          echo "No environment filter - deploying to all matching clusters"
+          echo "=============================="
+        fi
+
         for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
           CLUSTER_NAME=$(yq e ".clusters[$i].name" $MANIFEST)
           PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
@@ -88,6 +101,11 @@ runs:
           echo "Processing cluster: $CLUSTER_NAME"
           echo "Pattern: $PATTERN"
           echo "Environment: $ENVIRONMENT"
+
+          if [[ -n "${{ inputs.environment }}" && "$ENVIRONMENT" != "${{ inputs.environment }}" ]]; then
+            echo "Skipping cluster $CLUSTER_NAME (environment mismatch: $ENVIRONMENT != ${{ inputs.environment }})"
+            continue
+          fi
 
           MATCHED_FILES=$(echo "$CHANGED_FILES" | grep "$PATTERN" || true)
           if [ -z "$MATCHED_FILES" ]; then
