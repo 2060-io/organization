@@ -82,10 +82,12 @@ runs:
           CLUSTER_NAME=$(yq e ".clusters[$i].name" $MANIFEST)
           PATTERN=$(yq e ".clusters[$i].pattern" $MANIFEST)
           KUBECONFIG_SECRET=$(yq e ".clusters[$i].kubeconfigSecret" $MANIFEST)
+          ENVIRONMENT=$(yq e ".clusters[$i].environment // \"\"" $MANIFEST)
 
           echo "=============================="
           echo "Processing cluster: $CLUSTER_NAME"
           echo "Pattern: $PATTERN"
+          echo "Environment: $ENVIRONMENT"
 
           MATCHED_FILES=$(echo "$CHANGED_FILES" | grep "$PATTERN" || true)
           if [ -z "$MATCHED_FILES" ]; then
