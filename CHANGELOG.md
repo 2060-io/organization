@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/2060-io/organization/compare/v0.3.1...v0.3.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* add environment support ([#33](https://github.com/2060-io/organization/issues/33)) ([725e074](https://github.com/2060-io/organization/commit/725e074c9a3aa8790aa8abac6d977e2180e890b4))
+
 ## [0.3.1](https://github.com/2060-io/organization/compare/v0.3.0...v0.3.1) (2026-02-05)
 
 
