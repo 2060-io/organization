@@ -152,7 +152,9 @@ runs:
                   exit 1
                 fi
 
-                SECRET_ARGS="$SECRET_ARGS --set $SECRET_PATH=$SECRET_VALUE"
+                TMPFILE=$(mktemp /tmp/helm-secret-XXXXXX)
+                printf '%s' "$SECRET_VALUE" > "$TMPFILE"
+                SECRET_ARGS="$SECRET_ARGS --set-file $SECRET_PATH=$TMPFILE"
               done
             fi
             LABELS_ARG=""
@@ -164,6 +166,7 @@ runs:
               --version "$CHART_VERSION" \
               -f "$file" \
               $LABELS_ARG \
+              $SECRET_ARGS \
               --namespace "$CHART_NAMESPACE" \
               --create-namespace \
               $DRY_RUN_FLAG
