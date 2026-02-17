@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/2060-io/organization/compare/v0.3.2...v0.3.3) (2026-02-17)
+
+
+### Bug Fixes
+
+* handle secrets with json ([#35](https://github.com/2060-io/organization/issues/35)) ([8276f04](https://github.com/2060-io/organization/commit/8276f04d7d15efc57d4bf9543e499ff6e41fb8a3))
+
 ## [0.3.2](https://github.com/2060-io/organization/compare/v0.3.1...v0.3.2) (2026-02-16)
 
 
