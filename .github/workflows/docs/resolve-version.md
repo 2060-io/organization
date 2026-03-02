@@ -42,6 +42,25 @@ If neither system determines that a release should be created, the workflow outp
 
 ---
 
+## Inputs
+
+| Input | Type | Default | Description |
+| ----- | ---- | ------- | ----------- |
+| `bump-minor-pre-major` | `boolean` | `true` | Controls how `feat` commits are versioned in development (Semantic Release) releases. |
+
+### `bump-minor-pre-major` behavior
+
+This input controls the Semantic Release fallback step. Release Please continues to use the `bump-minor-pre-major` setting defined in your repo's `release-please-config.json`.
+
+| Commit type | `bump-minor-pre-major` | Bump |
+| ----------- | ---------------------- | ---- |
+| `feat` | `true` | **minor** (`0.3.3 → 0.4.0-dev.1`) |
+| `feat` | `false` | **patch** (`0.3.3 → 0.3.4-dev.1`) |
+| `fix` | any | **patch** |
+| `refactor`, `build` | any | **patch** |
+
+---
+
 ## **Required Files for Release Please**
 
 For **Release Please** to operate correctly within this workflow, you must include the minimum configuration and manifest files in the root of your repository.
@@ -145,6 +164,9 @@ on:
 jobs:
   versioning:
     uses: 2060-io/organization/.github/workflows/resolve-version-call.yml@main
+    with:
+      bump-minor-pre-major: true   # default — feat bumps minor in dev releases
+      # bump-minor-pre-major: false  # feat bumps patch in dev releases
 
   build:
     runs-on: ubuntu-latest
