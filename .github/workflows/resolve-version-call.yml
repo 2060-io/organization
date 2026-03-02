@@ -2,6 +2,11 @@ name: Stable Versioning
 
 on:
   workflow_call:
+    inputs:
+      bump-minor-pre-major:
+        type: boolean
+        default: true
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -72,7 +77,7 @@ jobs:
           branches: |
             [
               'release',
-              { 
+              {
                 name: 'main',
                 prerelease: 'dev'
               }
@@ -84,6 +89,7 @@ jobs:
                 {
                   "preset": "angular",
                   "releaseRules": [
+                    { "type": "feat", "release": "${{ inputs.bump-minor-pre-major && 'minor' || 'patch' }}" },
                     { "type": "refactor", "release": "patch" },
                     { "type": "build", "release": "patch" }
                   ]
