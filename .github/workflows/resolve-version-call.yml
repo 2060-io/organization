@@ -7,6 +7,14 @@ on:
         type: boolean
         default: true
         required: false
+      config-file:
+        type: string
+        default: release-please-config.json
+        required: false
+      manifest-file:
+        type: string
+        default: .release-please-manifest.json
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -65,8 +73,8 @@ jobs:
         uses: googleapis/release-please-action@v4
         id: release-please
         with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+          config-file: ${{ inputs.config-file }}
+          manifest-file: ${{ inputs.manifest-file }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fallback to Semantic Release (Dev)
