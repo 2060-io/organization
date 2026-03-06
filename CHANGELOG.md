@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/2060-io/organization/compare/v0.3.3...v0.4.0) (2026-03-06)
+
+
+### Features
+
+* add bump-minor-pre-major input to resolve-version workflow ([#37](https://github.com/2060-io/organization/issues/37)) ([4434803](https://github.com/2060-io/organization/commit/4434803247e169c1311f1894217d2df8ecd7fd31))
+
+
+### Bug Fixes
+
+* add config-file and manifest-file inputs to resolve-version workflow ([#39](https://github.com/2060-io/organization/issues/39)) ([1f36d6e](https://github.com/2060-io/organization/commit/1f36d6e7ef3f46af8950dcbefa720a1b42d37d13))
+
 ## [0.3.3](https://github.com/2060-io/organization/compare/v0.3.2...v0.3.3) (2026-02-17)
 
 
