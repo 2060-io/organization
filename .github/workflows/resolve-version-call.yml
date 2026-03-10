@@ -15,6 +15,10 @@ on:
         type: string
         default: .release-please-manifest.json
         required: false
+      create-dev-prerelease:
+        type: boolean
+        default: false
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -109,6 +113,16 @@ jobs:
               ],
               "@semantic-release/release-notes-generator"
             ]
+
+      - name: Create GitHub Pre-release (Dev)
+        if: inputs.create-dev-prerelease && steps.semantic-release.outputs.new-release-published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.semantic-release.outputs.release-version }}" \
+            --prerelease \
+            --title "v${{ steps.semantic-release.outputs.release-version }}" \
+            --notes "Dev pre-release v${{ steps.semantic-release.outputs.release-version }}"
 
       - name: Set final version outputs
         id: set-version
