@@ -19,6 +19,10 @@ on:
         type: boolean
         default: false
         required: false
+      dev-prerelease-title:
+        type: string
+        default: ""
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -119,10 +123,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ steps.semantic-release.outputs.release-version }}" \
+          TITLE="${{ inputs.dev-prerelease-title }}"
+          VERSION="v${{ steps.semantic-release.outputs.release-version }}"
+          RELEASE_TITLE="${TITLE:+$TITLE }${VERSION}"
+          gh release create "${VERSION}" \
             --prerelease \
-            --title "v${{ steps.semantic-release.outputs.release-version }}" \
-            --notes "Dev pre-release v${{ steps.semantic-release.outputs.release-version }}"
+            --title "${RELEASE_TITLE}" \
+            --generate-notes
 
       - name: Set final version outputs
         id: set-version
