@@ -128,13 +128,17 @@ jobs:
         run: |
           TITLE="${{ inputs.release-title }}"
           VERSION="${{ steps.release-please.outputs.tag_name }}"
-          CUSTOMIZE="${{ inputs.generate-notes }}"
+          GENERATE="${{ inputs.generate-notes }}"
           ARGS=()
           if [ -n "$TITLE" ]; then
             ARGS+=("--title" "${TITLE} ${VERSION}")
           fi
-          if [ "$CUSTOMIZE" == "true" ]; then
-            ARGS+=("--generate-notes")
+          if [ "$GENERATE" == "true" ]; then
+            NOTES=$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              --method POST \
+              -f tag_name="${VERSION}" \
+              --jq '.body')
+            ARGS+=("--notes" "$NOTES")
           fi
           if [ ${#ARGS[@]} -gt 0 ]; then
             gh release edit "${VERSION}" "${ARGS[@]}"
@@ -147,12 +151,12 @@ jobs:
         run: |
           TITLE="${{ inputs.release-title }}"
           VERSION="v${{ steps.semantic-release.outputs.release-version }}"
-          CUSTOMIZE="${{ inputs.generate-notes }}"
+          GENERATE="${{ inputs.generate-notes }}"
           ARGS=("--prerelease")
           if [ -n "$TITLE" ]; then
             ARGS+=("--title" "${TITLE} ${VERSION}")
           fi
-          if [ "$CUSTOMIZE" == "true" ]; then
+          if [ "$GENERATE" == "true" ]; then
             ARGS+=("--generate-notes")
           fi
           gh release create "${VERSION}" "${ARGS[@]}"
