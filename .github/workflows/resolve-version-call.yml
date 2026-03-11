@@ -15,7 +15,7 @@ on:
         type: string
         default: .release-please-manifest.json
         required: false
-      customize-release:
+      generate-notes:
         type: boolean
         default: false
         required: false
@@ -128,7 +128,7 @@ jobs:
         run: |
           TITLE="${{ inputs.release-title }}"
           VERSION="${{ steps.release-please.outputs.tag_name }}"
-          CUSTOMIZE="${{ inputs.customize-release }}"
+          CUSTOMIZE="${{ inputs.generate-notes }}"
           ARGS=()
           if [ -n "$TITLE" ]; then
             ARGS+=("--title" "${TITLE} ${VERSION}")
@@ -147,7 +147,7 @@ jobs:
         run: |
           TITLE="${{ inputs.release-title }}"
           VERSION="v${{ steps.semantic-release.outputs.release-version }}"
-          CUSTOMIZE="${{ inputs.customize-release }}"
+          CUSTOMIZE="${{ inputs.generate-notes }}"
           ARGS=("--prerelease")
           if [ -n "$TITLE" ]; then
             ARGS+=("--title" "${TITLE} ${VERSION}")
