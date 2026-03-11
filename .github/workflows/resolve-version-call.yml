@@ -15,6 +15,18 @@ on:
         type: string
         default: .release-please-manifest.json
         required: false
+      generate-notes:
+        type: boolean
+        default: false
+        required: false
+      create-pre-release:
+        type: boolean
+        default: false
+        required: false
+      release-title:
+        type: string
+        default: ""
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -40,7 +52,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 jobs:
   versioning:
@@ -109,6 +120,46 @@ jobs:
               ],
               "@semantic-release/release-notes-generator"
             ]
+
+      - name: Update GitHub Release (Stable)
+        if: steps.release-please.outputs.releases_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="${{ inputs.release-title }}"
+          VERSION="${{ steps.release-please.outputs.tag_name }}"
+          GENERATE="${{ inputs.generate-notes }}"
+          ARGS=()
+          if [ -n "$TITLE" ]; then
+            ARGS+=("--title" "${TITLE} ${VERSION}")
+          fi
+          if [ "$GENERATE" == "true" ]; then
+            NOTES=$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              --method POST \
+              -f tag_name="${VERSION}" \
+              --jq '.body')
+            ARGS+=("--notes" "$NOTES")
+          fi
+          if [ ${#ARGS[@]} -gt 0 ]; then
+            gh release edit "${VERSION}" "${ARGS[@]}"
+          fi
+
+      - name: Create GitHub Pre-release (Dev)
+        if: inputs.create-pre-release && steps.semantic-release.outputs.new-release-published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="${{ inputs.release-title }}"
+          VERSION="v${{ steps.semantic-release.outputs.release-version }}"
+          GENERATE="${{ inputs.generate-notes }}"
+          ARGS=("--prerelease")
+          if [ -n "$TITLE" ]; then
+            ARGS+=("--title" "${TITLE} ${VERSION}")
+          fi
+          if [ "$GENERATE" == "true" ]; then
+            ARGS+=("--generate-notes")
+          fi
+          gh release create "${VERSION}" "${ARGS[@]}"
 
       - name: Set final version outputs
         id: set-version

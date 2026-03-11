@@ -47,6 +47,11 @@ If neither system determines that a release should be created, the workflow outp
 | Input | Type | Default | Description |
 | ----- | ---- | ------- | ----------- |
 | `bump-minor-pre-major` | `boolean` | `true` | Controls how `feat` commits are versioned in development (Semantic Release) releases. |
+| `config-file` | `string` | `release-please-config.json` | Path to the Release Please configuration file. |
+| `manifest-file` | `string` | `.release-please-manifest.json` | Path to the Release Please manifest file. |
+| `generate-notes` | `boolean` | `false` | When `true`, uses `--generate-notes` to auto-generate release notes in GitHub's "What's Changed" format (PRs + contributors) for both stable and dev releases. |
+| `create-pre-release` | `boolean` | `false` | When `true`, creates a GitHub pre-release for development versions produced by Semantic Release. Has no effect on stable releases. |
+| `release-title` | `string` | `""` | Optional prefix for the GitHub Release title. When set, the title becomes `<release-title> <version>` (e.g. `My App v1.2.0`). Works independently of `generate-notes`. |
 
 ### `bump-minor-pre-major` behavior
 
@@ -58,6 +63,32 @@ This input controls the Semantic Release fallback step. Release Please continues
 | `feat` | `false` | **patch** (`0.3.3 → 0.3.4-dev.1`) |
 | `fix` | any | **patch** |
 | `refactor`, `build` | any | **patch** |
+
+### `generate-notes`, `create-pre-release` and `release-title` behavior
+
+These inputs are independent and can be combined freely:
+
+| Input | Effect |
+| ----- | ------ |
+| `release-title` set | Renames the release title to `<release-title> <version>` (e.g. `My App v1.2.0`). |
+| `generate-notes: true` | Replaces the default release notes with GitHub's auto-generated "What's Changed" format (`--generate-notes`): merged PRs, contributors, and full changelog link. |
+| `create-pre-release: true` | Creates a GitHub pre-release for the dev version. Without this, Semantic Release only creates a tag with no GitHub Release entry. |
+| All three set | Custom title, auto-generated notes, and a GitHub pre-release for dev versions. |
+
+The post-release steps activate based on their respective conditions:
+
+| Release type | Condition | Step | Customization |
+| ------------ | --------- | ---- | ------------- |
+| `stable` | `releases_created == 'true'` | `gh release edit` on the release created by Release Please | Title if `release-title` is set; notes if `generate-notes: true` |
+| `dev` | `create-pre-release: true` and `new-release-published == 'true'` | `gh release create --prerelease` | Title if `release-title` is set; notes if `generate-notes: true` |
+
+> **Note:** GitHub auto-generated notes list merged PRs and contributors between the previous tag and the current one, e.g.:
+> ```
+> What's Changed
+> fix: testing by @user in #49
+> feat: new feature by @user in #51
+> Full Changelog: v1.0.0...v1.1.0-dev.1
+> ```
 
 ---
 
@@ -165,8 +196,11 @@ jobs:
   versioning:
     uses: 2060-io/organization/.github/workflows/resolve-version-call.yml@main
     with:
-      bump-minor-pre-major: true   # default — feat bumps minor in dev releases
+      bump-minor-pre-major: true     # default — feat bumps minor in dev releases
       # bump-minor-pre-major: false  # feat bumps patch in dev releases
+      generate-notes: true    # use GitHub's "What's Changed" auto-generated notes
+      create-pre-release: true   # create a GitHub pre-release for dev versions
+      release-title: "My App"    # results in "My App v1.2.0" or "My App v1.2.0-dev.1"
 
   build:
     runs-on: ubuntu-latest
