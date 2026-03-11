@@ -19,6 +19,10 @@ on:
         type: boolean
         default: false
         required: false
+      create-pre-release:
+        type: boolean
+        default: false
+        required: false
       release-title:
         type: string
         default: ""
@@ -118,27 +122,40 @@ jobs:
             ]
 
       - name: Update GitHub Release (Stable)
-        if: inputs.customize-release && steps.release-please.outputs.releases_created == 'true'
+        if: steps.release-please.outputs.releases_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="${{ inputs.release-title }}"
           VERSION="${{ steps.release-please.outputs.tag_name }}"
-          RELEASE_TITLE="${TITLE:+$TITLE }${VERSION}"
-          gh release edit "${VERSION}" --title "${RELEASE_TITLE}"
+          CUSTOMIZE="${{ inputs.customize-release }}"
+          ARGS=()
+          if [ -n "$TITLE" ]; then
+            ARGS+=("--title" "${TITLE} ${VERSION}")
+          fi
+          if [ "$CUSTOMIZE" == "true" ]; then
+            ARGS+=("--generate-notes")
+          fi
+          if [ ${#ARGS[@]} -gt 0 ]; then
+            gh release edit "${VERSION}" "${ARGS[@]}"
+          fi
 
       - name: Create GitHub Pre-release (Dev)
-        if: inputs.customize-release && steps.semantic-release.outputs.new-release-published == 'true'
+        if: inputs.create-pre-release && steps.semantic-release.outputs.new-release-published == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="${{ inputs.release-title }}"
           VERSION="v${{ steps.semantic-release.outputs.release-version }}"
-          RELEASE_TITLE="${TITLE:+$TITLE }${VERSION}"
-          gh release create "${VERSION}" \
-            --prerelease \
-            --title "${RELEASE_TITLE}" \
-            --generate-notes
+          CUSTOMIZE="${{ inputs.customize-release }}"
+          ARGS=("--prerelease")
+          if [ -n "$TITLE" ]; then
+            ARGS+=("--title" "${TITLE} ${VERSION}")
+          fi
+          if [ "$CUSTOMIZE" == "true" ]; then
+            ARGS+=("--generate-notes")
+          fi
+          gh release create "${VERSION}" "${ARGS[@]}"
 
       - name: Set final version outputs
         id: set-version
