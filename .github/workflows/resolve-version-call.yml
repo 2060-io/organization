@@ -15,11 +15,11 @@ on:
         type: string
         default: .release-please-manifest.json
         required: false
-      create-dev-prerelease:
+      customize-release:
         type: boolean
         default: false
         required: false
-      dev-prerelease-title:
+      release-title:
         type: string
         default: ""
         required: false
@@ -118,12 +118,22 @@ jobs:
               "@semantic-release/release-notes-generator"
             ]
 
-      - name: Create GitHub Pre-release (Dev)
-        if: inputs.create-dev-prerelease && steps.semantic-release.outputs.new-release-published == 'true'
+      - name: Update GitHub Release (Stable)
+        if: inputs.customize-release && steps.release-please.outputs.releases_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TITLE="${{ inputs.dev-prerelease-title }}"
+          TITLE="${{ inputs.release-title }}"
+          VERSION="${{ steps.release-please.outputs.tag_name }}"
+          RELEASE_TITLE="${TITLE:+$TITLE }${VERSION}"
+          gh release edit "${VERSION}" --title "${RELEASE_TITLE}"
+
+      - name: Create GitHub Pre-release (Dev)
+        if: inputs.customize-release && steps.semantic-release.outputs.new-release-published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="${{ inputs.release-title }}"
           VERSION="v${{ steps.semantic-release.outputs.release-version }}"
           RELEASE_TITLE="${TITLE:+$TITLE }${VERSION}"
           gh release create "${VERSION}" \
