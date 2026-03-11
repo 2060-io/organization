@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/2060-io/organization/compare/v0.4.0...v0.4.1) (2026-03-11)
+
+
+### Bug Fixes
+
+* create pre release optional ([#40](https://github.com/2060-io/organization/issues/40)) ([696083b](https://github.com/2060-io/organization/commit/696083b139cb05d23e96886f83a2a777379bfa80))
+
 ## [0.4.0](https://github.com/2060-io/organization/compare/v0.3.3...v0.4.0) (2026-03-06)
 
 
