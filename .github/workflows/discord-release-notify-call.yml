@@ -1,0 +1,88 @@
+name: Discord Release Notify
+
+on:
+  workflow_call:
+    secrets:
+      DISCORD_UPDATES_WEBHOOK_URL:
+        description: "Discord channel webhook URL where release notifications are posted. If unset, the workflow exits without posting."
+        required: false
+
+jobs:
+  notify:
+    name: Post release to Discord
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - name: Post release embed
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_UPDATES_WEBHOOK_URL }}
+          REPO_FULL_NAME: ${{ github.repository }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          TAG: ${{ github.event.release.tag_name }}
+          BODY: ${{ github.event.release.body }}
+          URL: ${{ github.event.release.html_url }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          PUBLISHED_AT: ${{ github.event.release.published_at }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WEBHOOK_URL}" ]; then
+            echo "::warning::DISCORD_UPDATES_WEBHOOK_URL is not set, skipping Discord notification."
+            exit 0
+          fi
+
+          if [ -z "${BODY}" ] || [ "${BODY}" = "null" ]; then
+            BODY="(No release notes provided.)"
+          fi
+
+          if [ "${PRERELEASE}" = "true" ]; then
+            COLOR=$((0xf39c12))
+            LABEL="prerelease"
+          else
+            COLOR=$((0x2ecc71))
+            LABEL="stable"
+          fi
+
+          TITLE="${REPO_NAME} ${TAG}"
+          FOOTER="${REPO_FULL_NAME} (${LABEL})"
+
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg description "$BODY" \
+            --arg url "$URL" \
+            --arg footer "$FOOTER" \
+            --arg timestamp "$PUBLISHED_AT" \
+            --argjson color "$COLOR" \
+            '
+            def truncate_body($u):
+              if (. | length) > 3800 then
+                .[0:3800] + "\n\n[View full release on GitHub](" + $u + ")"
+              else
+                .
+              end;
+            {
+              embeds: [
+                {
+                  title: $title,
+                  description: ($description | truncate_body($url)),
+                  url: $url,
+                  color: $color,
+                  footer: { text: $footer },
+                  timestamp: $timestamp
+                }
+              ]
+            }')
+
+          HTTP_CODE=$(curl -sS -o /tmp/discord_response.txt -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            --data "$PAYLOAD" \
+            "$WEBHOOK_URL")
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Discord webhook returned HTTP ${HTTP_CODE}"
+            cat /tmp/discord_response.txt
+            exit 1
+          fi
+
+          echo "Posted release notification for ${TITLE} (HTTP ${HTTP_CODE})."
