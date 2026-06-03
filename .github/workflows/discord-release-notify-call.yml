@@ -2,27 +2,30 @@ name: Discord Release Notify
 
 on:
   workflow_call:
+    inputs:
+      tag_name:
+        description: "Release tag to announce (e.g. v1.2.3)."
+        required: true
+        type: string
     secrets:
       DISCORD_UPDATES_WEBHOOK_URL:
         description: "Discord channel webhook URL where release notifications are posted. If unset, the workflow exits without posting."
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   notify:
     name: Post release to Discord
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - name: Post release embed
         env:
+          GH_TOKEN: ${{ github.token }}
           WEBHOOK_URL: ${{ secrets.DISCORD_UPDATES_WEBHOOK_URL }}
           REPO_FULL_NAME: ${{ github.repository }}
-          REPO_NAME: ${{ github.event.repository.name }}
-          TAG: ${{ github.event.release.tag_name }}
-          BODY: ${{ github.event.release.body }}
-          URL: ${{ github.event.release.html_url }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
-          PUBLISHED_AT: ${{ github.event.release.published_at }}
+          TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
 
@@ -30,6 +33,14 @@ jobs:
             echo "::warning::DISCORD_UPDATES_WEBHOOK_URL is not set, skipping Discord notification."
             exit 0
           fi
+
+          REPO_NAME="${REPO_FULL_NAME##*/}"
+          TAG_ENC=$(jq -rn --arg t "$TAG" '$t|@uri')
+          release=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_ENC}")
+          BODY=$(jq -r '.body // ""' <<< "$release")
+          URL=$(jq -r '.html_url' <<< "$release")
+          PRERELEASE=$(jq -r '.prerelease' <<< "$release")
+          PUBLISHED_AT=$(jq -r '.published_at' <<< "$release")
 
           if [ -z "${BODY}" ] || [ "${BODY}" = "null" ]; then
             BODY="(No release notes provided.)"
