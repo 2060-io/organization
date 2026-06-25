@@ -273,7 +273,7 @@ jobs:
       RELEASE_PATCH: ${{ needs.resolve-version.outputs.release-patch }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Log in to Docker Hub
         run: |
@@ -309,7 +309,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run publish-helm action
         id: publish-helm
@@ -321,3 +321,18 @@ jobs:
           charts: "./charts"
           dry-run: true
 ```
+
+---
+
+## Security Note: Pin Third-Party Actions by SHA
+
+Third-party actions in these examples are pinned to a **full commit SHA** instead of a
+mutable tag (e.g. `actions/checkout@11bd719...` instead of `actions/checkout@v4`). A tag
+can be silently moved or republished by its maintainer, so pinning to an immutable SHA
+protects the pipeline against a compromised or hijacked action.
+
+The trailing comment (`# v4.2.2`) records the human-readable version so the pin stays
+auditable and tools like Dependabot can keep it updated.
+
+> First-party references to this org's own reusable workflows and actions
+> (`2060-io/...@main`) are intentionally kept on `@main`.
