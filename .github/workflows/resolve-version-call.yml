@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
@@ -81,28 +81,23 @@ jobs:
           fi
 
       - name: Process Release Please (Stable)
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release-please
         with:
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fallback to Semantic Release (Dev)
+      - name: Prepare semantic-release config (Dev)
         if: steps.release-please.outputs.release_created != 'true'
-        uses: codfish/semantic-release-action@v3
-        id: semantic-release
-        with:
-          branches: |
-            [
-              'release',
-              {
-                name: 'main',
-                prerelease: 'dev'
-              }
-            ]
-          plugins: |
-            [
+        run: |
+          cat > .releaserc.json <<'EOF'
+          {
+            "branches": [
+              "release",
+              { "name": "main", "prerelease": "dev" }
+            ],
+            "plugins": [
               [
                 "@semantic-release/commit-analyzer",
                 {
@@ -114,12 +109,17 @@ jobs:
                   ]
                 }
               ],
-              [
-                "@semantic-release/npm",
-                { "npmPublish": false }
-              ],
               "@semantic-release/release-notes-generator"
             ]
+          }
+          EOF
+
+      - name: Fallback to Semantic Release (Dev)
+        if: steps.release-please.outputs.release_created != 'true'
+        id: semantic-release
+        uses: cycjimmy/semantic-release-action@16ca923e6ccbb50770c415a0ccd43709a8c5f7a4 # v4.2.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update GitHub Release (Stable)
         if: steps.release-please.outputs.releases_created == 'true'
@@ -145,12 +145,12 @@ jobs:
           fi
 
       - name: Create GitHub Pre-release (Dev)
-        if: inputs.create-pre-release && steps.semantic-release.outputs.new-release-published == 'true'
+        if: inputs.create-pre-release && steps.semantic-release.outputs.new_release_published == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="${{ inputs.release-title }}"
-          VERSION="v${{ steps.semantic-release.outputs.release-version }}"
+          VERSION="v${{ steps.semantic-release.outputs.new_release_version }}"
           GENERATE="${{ inputs.generate-notes }}"
           ARGS=("--prerelease")
           if [ -n "$TITLE" ]; then
@@ -172,14 +172,14 @@ jobs:
             echo "minor=${{ steps.release-please.outputs.minor }}" >> $GITHUB_OUTPUT
             echo "patch=${{ steps.release-please.outputs.patch }}" >> $GITHUB_OUTPUT
             echo "Stable release created: ${{ steps.release-please.outputs.tag_name }}"
-          elif [ "${{ steps.semantic-release.outputs.new-release-published }}" == "true" ]; then
-            echo "version=v${{ steps.semantic-release.outputs.release-version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.semantic-release.outputs.new_release_published }}" == "true" ]; then
+            echo "version=v${{ steps.semantic-release.outputs.new_release_version }}" >> $GITHUB_OUTPUT
             echo "type=dev" >> $GITHUB_OUTPUT
             echo "published=true" >> $GITHUB_OUTPUT
-            echo "major=${{ steps.semantic-release.outputs.release-major }}" >> $GITHUB_OUTPUT
-            echo "minor=${{ steps.semantic-release.outputs.release-minor }}" >> $GITHUB_OUTPUT
-            echo "patch=${{ steps.semantic-release.outputs.release-patch }}" >> $GITHUB_OUTPUT
-            echo "Dev release created: ${{ steps.semantic-release.outputs.release-version }}"
+            echo "major=${{ steps.semantic-release.outputs.new_release_major_version }}" >> $GITHUB_OUTPUT
+            echo "minor=${{ steps.semantic-release.outputs.new_release_minor_version }}" >> $GITHUB_OUTPUT
+            echo "patch=${{ steps.semantic-release.outputs.new_release_patch_version }}" >> $GITHUB_OUTPUT
+            echo "Dev release created: ${{ steps.semantic-release.outputs.new_release_version }}"
           else
             echo "type=none" >> $GITHUB_OUTPUT
             echo "published=false" >> $GITHUB_OUTPUT
