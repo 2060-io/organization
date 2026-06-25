@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/2060-io/organization/compare/v0.4.1...v0.5.0) (2026-06-25)
+
+
+### Features
+
+* add reusable Discord release notify workflow ([#44](https://github.com/2060-io/organization/issues/44)) ([921e383](https://github.com/2060-io/organization/commit/921e383efc5acf71df0626c6960154bd51ea792f))
+
+
+### Bug Fixes
+
+* solve malware problem ([#48](https://github.com/2060-io/organization/issues/48)) ([6c3f1ba](https://github.com/2060-io/organization/commit/6c3f1ba4e31ad38bda479b558b0a0e61fa65ddad))
+
 ## [0.4.1](https://github.com/2060-io/organization/compare/v0.4.0...v0.4.1) (2026-03-11)
 
 
