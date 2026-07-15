@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/2060-io/organization/compare/v0.5.0...v0.5.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* resolve-version nor working on maintenance branches ([#57](https://github.com/2060-io/organization/issues/57)) ([808d60d](https://github.com/2060-io/organization/commit/808d60d5adc99a7afa8e4da01652a14de8671178))
+
 ## [0.5.0](https://github.com/2060-io/organization/compare/v0.4.1...v0.5.0) (2026-06-25)
 
 
