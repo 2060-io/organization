@@ -27,6 +27,11 @@ on:
         type: string
         default: ""
         required: false
+      prerelease-branch:
+        description: "Branch semantic-release treats as the dev prerelease branch"
+        type: string
+        default: main
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -87,6 +92,7 @@ jobs:
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
 
       - name: Prepare semantic-release config (Dev)
         if: steps.release-please.outputs.release_created != 'true'
@@ -95,7 +101,7 @@ jobs:
           {
             "branches": [
               "release",
-              { "name": "main", "prerelease": "dev" }
+              { "name": "${{ inputs.prerelease-branch }}", "prerelease": "dev" }
             ],
             "plugins": [
               [
