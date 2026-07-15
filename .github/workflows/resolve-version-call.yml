@@ -92,6 +92,7 @@ jobs:
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
 
       - name: Prepare semantic-release config (Dev)
         if: steps.release-please.outputs.release_created != 'true'
