@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/2060-io/organization/compare/v0.5.1...v0.5.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **resolve-version:** dev breaking change bump ([#59](https://github.com/2060-io/organization/issues/59)) ([1d8ff16](https://github.com/2060-io/organization/commit/1d8ff16fafcbb35e7a54065c8fc2323b84ae1360))
+
 ## [0.5.1](https://github.com/2060-io/organization/compare/v0.5.0...v0.5.1) (2026-07-15)
 
 
