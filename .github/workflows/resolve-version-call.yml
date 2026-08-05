@@ -4,6 +4,7 @@ on:
   workflow_call:
     inputs:
       bump-minor-pre-major:
+        description: "Deprecated: use `feat-release-type`. Only consulted when the Release Please config cannot be read."
         type: boolean
         default: true
         required: false
@@ -31,6 +32,16 @@ on:
         description: "Branch semantic-release treats as the dev prerelease branch"
         type: string
         default: main
+        required: false
+      breaking-release-type:
+        description: "Bump applied to breaking changes in dev prereleases: major, minor, patch, or auto (derive from the Release Please config)"
+        type: string
+        default: auto
+        required: false
+      feat-release-type:
+        description: "Bump applied to feat commits in dev prereleases: major, minor, patch, or auto (derive from the Release Please config)"
+        type: string
+        default: auto
         required: false
     outputs:
       release-version:
@@ -94,6 +105,61 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: ${{ github.ref_name }}
 
+      - name: Resolve dev release rules (Dev)
+        if: steps.release-please.outputs.release_created != 'true'
+        id: release-rules
+        env:
+          BREAKING_RELEASE_TYPE: ${{ inputs.breaking-release-type }}
+          FEAT_RELEASE_TYPE: ${{ inputs.feat-release-type }}
+          BUMP_MINOR_PRE_MAJOR: ${{ inputs.bump-minor-pre-major }}
+          CONFIG_FILE: ${{ inputs.config-file }}
+          MANIFEST_FILE: ${{ inputs.manifest-file }}
+        run: |
+          set -euo pipefail
+
+          # Release Please owns the version policy, so the dev channel derives its
+          # rules from the same config instead of keeping a second source of truth.
+          # Two separate keys govern pre-1.0.0 behaviour:
+          #   bump-minor-pre-major           -> breaking changes bump minor, not major
+          #   bump-patch-for-minor-pre-major -> feat changes bump patch, not minor
+          # Semantic Release has no pre-1.0 special case of its own, so without this
+          # a breaking change on 0.3.2 would resolve to 1.0.0-dev while Release
+          # Please proposes 0.4.0 for the same commits.
+          VERSION=$(jq -r '(([.["."]] + [to_entries[].value] | map(select(type == "string")) | first)) // empty' "$MANIFEST_FILE" 2>/dev/null || true)
+
+          config_flag() {
+            jq -r --arg key "$1" '.[$key] // false' "$CONFIG_FILE" 2>/dev/null || echo false
+          }
+
+          if [ -z "$VERSION" ]; then
+            # Degrade rather than fail the release: plain semver for breaking
+            # changes, and the deprecated input for feat commits.
+            BREAKING=major
+            if [ "$BUMP_MINOR_PRE_MAJOR" = "true" ]; then FEAT=minor; else FEAT=patch; fi
+            echo "No version found in '$MANIFEST_FILE'; using bump-minor-pre-major=$BUMP_MINOR_PRE_MAJOR for feat"
+          elif [ "${VERSION%%.*}" != "0" ]; then
+            BREAKING=major
+            FEAT=minor
+            echo "Current version $VERSION"
+          else
+            if [ "$(config_flag bump-minor-pre-major)" = "true" ]; then BREAKING=minor; else BREAKING=patch; fi
+            if [ "$(config_flag bump-patch-for-minor-pre-major)" = "true" ]; then FEAT=patch; else FEAT=minor; fi
+            echo "Current version $VERSION (pre-1.0.0)"
+          fi
+
+          if [ "$BREAKING_RELEASE_TYPE" != "auto" ]; then
+            BREAKING="$BREAKING_RELEASE_TYPE"
+            echo "breaking-release-type set explicitly"
+          fi
+          if [ "$FEAT_RELEASE_TYPE" != "auto" ]; then
+            FEAT="$FEAT_RELEASE_TYPE"
+            echo "feat-release-type set explicitly"
+          fi
+
+          echo "Dev bumps -> breaking changes: $BREAKING, feat: $FEAT"
+          echo "breaking=$BREAKING" >> "$GITHUB_OUTPUT"
+          echo "feat=$FEAT" >> "$GITHUB_OUTPUT"
+
       - name: Prepare semantic-release config (Dev)
         if: steps.release-please.outputs.release_created != 'true'
         run: |
@@ -108,8 +174,13 @@ jobs:
                 "@semantic-release/commit-analyzer",
                 {
                   "preset": "angular",
+                  "parserOpts": {
+                    "headerPattern": "^(\\w*)(?:\\(([^)]*)\\))?!?: (.*)$",
+                    "breakingHeaderPattern": "^(\\w*)(?:\\(([^)]*)\\))?!: (.*)$"
+                  },
                   "releaseRules": [
-                    { "type": "feat", "release": "${{ inputs.bump-minor-pre-major && 'minor' || 'patch' }}" },
+                    { "breaking": true, "release": "${{ steps.release-rules.outputs.breaking }}" },
+                    { "type": "feat", "release": "${{ steps.release-rules.outputs.feat }}" },
                     { "type": "refactor", "release": "patch" },
                     { "type": "build", "release": "patch" }
                   ]
