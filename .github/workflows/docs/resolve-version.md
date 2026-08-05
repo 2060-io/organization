@@ -52,6 +52,8 @@ If neither system determines that a release should be created, the workflow outp
 | `generate-notes` | `boolean` | `false` | When `true`, uses `--generate-notes` to auto-generate release notes in GitHub's "What's Changed" format (PRs + contributors) for both stable and dev releases. |
 | `create-pre-release` | `boolean` | `false` | When `true`, creates a GitHub pre-release for development versions produced by Semantic Release. Has no effect on stable releases. |
 | `release-title` | `string` | `""` | Optional prefix for the GitHub Release title. When set, the title becomes `<release-title> <version>` (e.g. `My App v1.2.0`). Works independently of `generate-notes`. |
+| `prerelease-branch` | `string` | `main` | Branch that Semantic Release treats as the `dev` prerelease branch. |
+| `breaking-release-type` | `string` | `auto` | Bump applied to breaking changes in development (Semantic Release) releases: `major`, `minor`, `patch`, or `auto`. |
 
 ### `bump-minor-pre-major` behavior
 
@@ -63,6 +65,31 @@ This input controls the Semantic Release fallback step. Release Please continues
 | `feat` | `false` | **patch** (`0.3.3 → 0.3.4-dev.1`) |
 | `fix` | any | **patch** |
 | `refactor`, `build` | any | **patch** |
+
+### `breaking-release-type` behavior
+
+Breaking changes (`feat!:`, `fix(scope)!:`, or a `BREAKING CHANGE:` footer) are resolved by their
+own rule, which takes precedence over the commit-type rules above — a `feat!` commit is bumped as a
+breaking change, not as a `feat`.
+
+With the default `auto`, the bump mirrors Release Please's pre-major rules, so the dev channel stays
+in step with the stable channel:
+
+| Current version | `bump-minor-pre-major` (in `release-please-config.json`) | Breaking change bump |
+| --------------- | ------------------------------------------------------- | -------------------- |
+| `>= 1.0.0` | any | **major** (`1.4.2 → 2.0.0-dev.1`) |
+| `0.x.y` | `true` | **minor** (`0.3.2 → 0.4.0-dev.1`) |
+| `0.x.y` | `false` | **patch** (`0.3.2 → 0.3.3-dev.1`) |
+
+`auto` reads the current version from `manifest-file` (the root `"."` entry, or the first entry in a
+monorepo manifest) and the flag from `config-file`. If the version cannot be read — missing, empty or
+malformed manifest — it falls back to `major` rather than failing the job; an unreadable `config-file`
+falls back to `false`, matching Release Please's own default. Set the input explicitly
+(`breaking-release-type: minor`) to override the derived value.
+
+> **Why this exists:** Semantic Release has no pre-1.0 special case — a breaking change on `0.3.2`
+> would otherwise resolve to `1.0.0-dev.1`, while Release Please would propose `0.4.0` for the same
+> commits. `auto` keeps both systems on the same version.
 
 ### `generate-notes`, `create-pre-release` and `release-title` behavior
 
@@ -198,6 +225,8 @@ jobs:
     with:
       bump-minor-pre-major: true     # default — feat bumps minor in dev releases
       # bump-minor-pre-major: false  # feat bumps patch in dev releases
+      breaking-release-type: auto    # default — breaking changes follow Release Please's pre-major rules
+      # breaking-release-type: minor # force breaking changes to bump minor in dev releases
       generate-notes: true    # use GitHub's "What's Changed" auto-generated notes
       create-pre-release: true   # create a GitHub pre-release for dev versions
       release-title: "My App"    # results in "My App v1.2.0" or "My App v1.2.0-dev.1"

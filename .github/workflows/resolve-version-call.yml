@@ -32,6 +32,11 @@ on:
         type: string
         default: main
         required: false
+      breaking-release-type:
+        description: "Bump applied to breaking changes in dev prereleases: major, minor, patch, or auto (mirror Release Please's pre-major rules)"
+        type: string
+        default: auto
+        required: false
     outputs:
       release-version:
         description: "Release version from versioning system"
@@ -94,6 +99,45 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: ${{ github.ref_name }}
 
+      - name: Resolve breaking change bump (Dev)
+        if: steps.release-please.outputs.release_created != 'true'
+        id: breaking-rule
+        env:
+          BREAKING_RELEASE_TYPE: ${{ inputs.breaking-release-type }}
+          CONFIG_FILE: ${{ inputs.config-file }}
+          MANIFEST_FILE: ${{ inputs.manifest-file }}
+        run: |
+          set -euo pipefail
+
+          if [ "$BREAKING_RELEASE_TYPE" != "auto" ]; then
+            echo "release=$BREAKING_RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+            echo "Breaking changes bump: $BREAKING_RELEASE_TYPE (explicit)"
+            exit 0
+          fi
+
+          # Mirror Release Please: below 1.0.0 a breaking change never bumps major,
+          # it follows `bump-minor-pre-major` instead. Without this the dev channel
+          # would jump to 1.0.0-dev while the stable channel stays on 0.x.
+          # An unreadable config or manifest degrades to the plain semver behaviour
+          # rather than failing the release.
+          RELEASE=major
+          VERSION=$(jq -r '(([.["."]] + [to_entries[].value] | map(select(type == "string")) | first)) // empty' "$MANIFEST_FILE" 2>/dev/null || true)
+
+          if [ -z "$VERSION" ]; then
+            echo "No version found in '$MANIFEST_FILE' -> breaking changes bump: $RELEASE"
+          elif [ "${VERSION%%.*}" != "0" ]; then
+            echo "Current version $VERSION -> breaking changes bump: $RELEASE"
+          else
+            if [ "$(jq -r '.["bump-minor-pre-major"] // false' "$CONFIG_FILE" 2>/dev/null || echo false)" = "true" ]; then
+              RELEASE=minor
+            else
+              RELEASE=patch
+            fi
+            echo "Current version $VERSION (pre-1.0.0) -> breaking changes bump: $RELEASE"
+          fi
+
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+
       - name: Prepare semantic-release config (Dev)
         if: steps.release-please.outputs.release_created != 'true'
         run: |
@@ -108,7 +152,12 @@ jobs:
                 "@semantic-release/commit-analyzer",
                 {
                   "preset": "angular",
+                  "parserOpts": {
+                    "headerPattern": "^(\\w*)(?:\\(([^)]*)\\))?!?: (.*)$",
+                    "breakingHeaderPattern": "^(\\w*)(?:\\(([^)]*)\\))?!: (.*)$"
+                  },
                   "releaseRules": [
+                    { "breaking": true, "release": "${{ steps.breaking-rule.outputs.release }}" },
                     { "type": "feat", "release": "${{ inputs.bump-minor-pre-major && 'minor' || 'patch' }}" },
                     { "type": "refactor", "release": "patch" },
                     { "type": "build", "release": "patch" }
