@@ -135,16 +135,14 @@ jobs:
             fi
           else
             # All zeros on a branch's first push, a dropped commit after a force push.
+            # The action diffs this same range with no guard of its own, so recovering
+            # the range here would only buy a green job that deploys nothing.
             if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              BEFORE=$(git rev-parse --verify --quiet "${AFTER}^" || true)
+              echo "::error::Cannot diff against '$BEFORE': the branch's first push, or a force push dropped it. Deploy each release with the 'release' input instead"
+              exit 1
             fi
 
-            if [[ -n "$BEFORE" ]]; then
-              FILES=$(git diff --name-only "$BEFORE" "$AFTER" | { grep -E "^${DIRECTORY}/.*\.(yml|yaml)$" || true; })
-            else
-              # A repository whose first commit is the deployment itself.
-              FILES=$(git ls-files "$DIRECTORY" | { grep -E "\.(yml|yaml)$" || true; })
-            fi
+            FILES=$(git diff --name-only "$BEFORE" "$AFTER" | { grep -E "^${DIRECTORY}/.*\.(yml|yaml)$" || true; })
           fi
 
           if [[ -z "$FILES" ]]; then
@@ -219,6 +217,11 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     environment: ${{ matrix.environment }}
+    concurrency:
+      # One queue per cluster. Never cancelled: a cancelled `helm upgrade` leaves
+      # the release in pending-upgrade.
+      group: helm-deploy-${{ matrix.environment }}
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
