@@ -334,9 +334,12 @@ jobs:
             [[ -z "$NAME" || "$NAME" == \#* ]] && continue
 
             VALUE=$(jq -r --arg k "$NAME" '.[$k] // empty' <<< "$SECRETS_JSON")
+
+            # Only the charts of this run know which of these they need, and the
+            # action fails on the ones it cannot resolve.
             if [[ -z "$VALUE" ]]; then
-              echo "::error::Chart secret '$NAME' is not set in environment '$ENVIRONMENT'"
-              exit 1
+              echo "::warning::Chart secret '$NAME' is not set in environment '$ENVIRONMENT'"
+              continue
             fi
 
             DELIMITER="GHEOF_${RANDOM}${RANDOM}"
@@ -349,7 +352,7 @@ jobs:
           done <<< "$CHART_SECRETS"
 
       - name: Helm deploy
-        uses: 2060-io/organization/actions/helm-deploy@v0.5.2
+        uses: 2060-io/organization/actions/helm-deploy@562f890be78c7fd3f07695446f4506d383c52219 # v0.5.2
         with:
           directory: ${{ inputs.directory }}
           manifest: ${{ inputs.manifest }}
