@@ -40,7 +40,6 @@ jobs:
       directory: charts
       # Optional: a Kubernetes Secret to create before deploying
       secret-name: hologram-secrets
-      secret-namespace: hologram-backend
       secret-keys: |
         MEDIATOR_WALLET_KEY
         FIREBASE_CONFIG=@firebase-config.json
@@ -56,5 +55,10 @@ Three requirements:
 * Every cluster in the manifest declares `kubeconfigSecret: KUBECONFIG`. The name of
   the secret in GitHub is free, through the `kubeconfig-secret` input.
 
+The Secret is created in the `chartNamespace` that the values files of the cluster
+declare, so an environment whose namespace differs from the others needs nothing
+extra. The optional `secret-namespace` input overrides it for every environment at
+once.
+
 The same workflow covers the manual flows: pass `release` for a single release, and
-`uninstall: true` to remove it. The file header documents every input.
+`uninstall: true` to remove it. Every input is documented in the workflow file.
