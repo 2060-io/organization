@@ -119,8 +119,22 @@ runs:
             continue
           fi
 
-          echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
-          export KUBECONFIG=$PWD/kubeconfig.yaml
+          # The secret is expanded straight into a per-cluster file and KUBECONFIG is
+          # never exported: keeping the value in a variable, or in KUBECONFIG itself,
+          # lets one iteration clobber the variable the next one reads from.
+          if [[ -z "${!KUBECONFIG_SECRET:-}" ]]; then
+            echo "::error::Secret '$KUBECONFIG_SECRET' is empty or not exposed to this step"
+            exit 1
+          fi
+
+          KUBECONFIG_FILE="$RUNNER_TEMP/kubeconfig-$CLUSTER_NAME.yaml"
+          printf '%s\n' "${!KUBECONFIG_SECRET}" > "$KUBECONFIG_FILE"
+          chmod 600 "$KUBECONFIG_FILE"
+
+          if ! yq e -e '.clusters[0].cluster.server' "$KUBECONFIG_FILE" >/dev/null 2>&1; then
+            echo "::error::Secret '$KUBECONFIG_SECRET' does not contain a valid kubeconfig"
+            exit 1
+          fi
           echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
           while read -r file; do
@@ -169,6 +183,7 @@ runs:
             fi
 
             helm upgrade --install "$RELEASE" "$CHART_SOURCE" \
+              --kubeconfig "$KUBECONFIG_FILE" \
               --version "$CHART_VERSION" \
               -f "$file" \
               $LABELS_ARG \
@@ -204,8 +219,22 @@ runs:
             continue
           fi
 
-          echo "${!KUBECONFIG_SECRET}" > kubeconfig.yaml
-          export KUBECONFIG=$PWD/kubeconfig.yaml
+          # The secret is expanded straight into a per-cluster file and KUBECONFIG is
+          # never exported: keeping the value in a variable, or in KUBECONFIG itself,
+          # lets one iteration clobber the variable the next one reads from.
+          if [[ -z "${!KUBECONFIG_SECRET:-}" ]]; then
+            echo "::error::Secret '$KUBECONFIG_SECRET' is empty or not exposed to this step"
+            exit 1
+          fi
+
+          KUBECONFIG_FILE="$RUNNER_TEMP/kubeconfig-$CLUSTER_NAME.yaml"
+          printf '%s\n' "${!KUBECONFIG_SECRET}" > "$KUBECONFIG_FILE"
+          chmod 600 "$KUBECONFIG_FILE"
+
+          if ! yq e -e '.clusters[0].cluster.server' "$KUBECONFIG_FILE" >/dev/null 2>&1; then
+            echo "::error::Secret '$KUBECONFIG_SECRET' does not contain a valid kubeconfig"
+            exit 1
+          fi
           echo "Using kubeconfig for cluster: $CLUSTER_NAME"
 
           CHART_NAMESPACE=$(yq e '.chartNamespace // ""' "$FILE")
@@ -216,6 +245,7 @@ runs:
 
           echo "Uninstalling release '$RELEASE_NAME' from cluster '$CLUSTER_NAME'"
           helm uninstall "$RELEASE_NAME" \
+            --kubeconfig "$KUBECONFIG_FILE" \
             --namespace "$CHART_NAMESPACE" \
             $DRY_RUN_FLAG || echo "Release not found or already removed"
         done
