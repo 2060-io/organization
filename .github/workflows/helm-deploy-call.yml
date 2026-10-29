@@ -1,0 +1,403 @@
+# =============================================================================
+# Helm Deploy — reusable workflow
+# =============================================================================
+#
+# Runs the deployment flow that every *-deploy repository copies today: resolve
+# the clusters a change touches, then deploy each one from its own job, with the
+# secrets and the approvals of its own GitHub environment.
+#
+# The caller keeps only what is repository data:
+#
+#   jobs:
+#     cd:
+#       uses: 2060-io/organization/.github/workflows/helm-deploy-call.yml@v0.6.0
+#       with:
+#         directory: charts
+#         secret-name: hologram-secrets
+#         secret-namespace: hologram-backend
+#         secret-keys: |
+#           MEDIATOR_WALLET_KEY
+#           FIREBASE_CONFIG=@firebase-config.json
+#       secrets: inherit
+#
+# The cluster manifest (`clusters.yml`) stays the single source of truth: this
+# workflow reads `pattern` to know which clusters a change touches, and
+# `environment` to know which GitHub environment owns each one. No workflow has
+# to repeat that mapping any more.
+#
+# One cluster per job is what keeps a deployment inside its own cluster: the job
+# only ever holds the kubeconfig of the environment it deploys to, and it passes
+# `environment` to the action so the action deploys that cluster alone.
+#
+# `secrets: inherit` is required: this workflow reads the kubeconfig, the keys of
+# `secret-keys` and the names of `chart-secrets` from the caller's secrets.
+#
+# =============================================================================
+
+name: Helm Deploy
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        description: "Base directory holding the values files (e.g. charts)"
+        required: true
+        type: string
+      manifest:
+        description: "Cluster manifest defining name, pattern and environment per cluster"
+        required: false
+        type: string
+        default: clusters.yml
+      kubeconfig-secret:
+        description: |
+          Name of the secret holding the kubeconfig of the cluster, in plain text.
+          Each GitHub environment holds its own value under this same name.
+
+          Independently of this name, every cluster of the manifest must declare
+          `kubeconfigSecret: KUBECONFIG`: the name of an `env:` key cannot be an
+          expression, so this workflow always hands the value to the action under
+          `KUBECONFIG`. The manifest no longer has to know how a repository names
+          its secrets.
+        required: false
+        type: string
+        default: KUBECONFIG
+      release:
+        description: |
+          Deploy or uninstall a single release, as the path of its values file
+          without the extension (e.g. `dev/hologram-server-chart`). Its directory
+          selects the cluster, so change detection is skipped.
+        required: false
+        type: string
+        default: ""
+      uninstall:
+        description: "Uninstall the release of `release` instead of deploying it"
+        required: false
+        type: boolean
+        default: false
+      dry-run:
+        description: "Run helm in dry-run mode"
+        required: false
+        type: boolean
+        default: false
+      deploy-labels:
+        description: "Labels applied to the Helm release (key=value,key2=value2)"
+        required: false
+        type: string
+        default: ""
+      secret-name:
+        description: |
+          Name of a Kubernetes Secret to create or update before deploying. Leave
+          it empty for a repository whose charts carry their own secrets.
+        required: false
+        type: string
+        default: ""
+      secret-namespace:
+        description: "Namespace of `secret-name`"
+        required: false
+        type: string
+        default: ""
+      secret-keys:
+        description: |
+          Keys of `secret-name`, one per line. Each line names a secret of the
+          GitHub environment and, optionally, the key it is written under:
+
+            MEDIATOR_WALLET_KEY              key MEDIATOR_WALLET_KEY
+            OPENAI_API_KEY=openai-key        key openai-key
+            FIREBASE_CONFIG=@firebase.json   key firebase.json, written as a file
+            vars:GH_AGENT_CRED_DEF_ID        value read from `vars`, not `secrets`
+
+          CAUTION: `kubectl apply` removes every key that the last apply wrote and
+          this one does not. A key whose value is empty stops the run when the
+          Secret already holds it, and only warns when it does not, so a missing
+          optional secret cannot silently blank a live key.
+        required: false
+        type: string
+        default: ""
+      chart-secrets:
+        description: |
+          Names of the secrets that the values files reference under
+          `chartSecrets`, one per line. They are exported to the environment of
+          the deploy step, which is where the action reads them from.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Which GitHub environments does this run deploy to? Reads the manifest only,
+  # so it needs no cluster access and no secrets.
+  # ---------------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.plan.outputs.environments }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # Same version and checksum as actions/helm-deploy, so both read the
+      # manifest with the same yq.
+      - name: Install yq
+        env:
+          YQ_VERSION: v4.6.0
+          YQ_SHA256: 3cd45de096cc3c5fcff3ba4b3fbc10cd2ad606c670b626b51f60ca66b7ddcd9a
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq
+          echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum -c -
+          chmod +x /usr/local/bin/yq
+
+      - name: Resolve target environments
+        id: plan
+        env:
+          DIRECTORY: ${{ inputs.directory }}
+          MANIFEST: ${{ inputs.manifest }}
+          RELEASE: ${{ inputs.release }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f "$MANIFEST" ]]; then
+            echo "::error::Manifest file '$MANIFEST' not found"
+            exit 1
+          fi
+
+          if [[ -n "$RELEASE" ]]; then
+            # Manual mode: the path of the release carries its cluster.
+            FILES=""
+            for EXT in yml yaml; do
+              if [[ -f "$DIRECTORY/$RELEASE.$EXT" ]]; then
+                FILES="$DIRECTORY/$RELEASE.$EXT"
+              fi
+            done
+            if [[ -z "$FILES" ]]; then
+              echo "::error::No values file at $DIRECTORY/$RELEASE.yml or .yaml"
+              exit 1
+            fi
+          else
+            # `github.event.before` is all zeros on the first push of a branch, and
+            # points at a dropped commit after a force push.
+            if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              BEFORE=$(git rev-parse --verify --quiet "${AFTER}^" || true)
+            fi
+
+            if [[ -n "$BEFORE" ]]; then
+              FILES=$(git diff --name-only "$BEFORE" "$AFTER" | { grep -E "^${DIRECTORY}/.*\.(yml|yaml)$" || true; })
+            else
+              # A repository whose first commit is the deployment itself.
+              FILES=$(git ls-files "$DIRECTORY" | { grep -E "\.(yml|yaml)$" || true; })
+            fi
+          fi
+
+          if [[ -z "$FILES" ]]; then
+            echo "No values file of $DIRECTORY changed, nothing to deploy"
+            echo "environments=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Values files in this run:"
+          echo "$FILES"
+
+          ENVIRONMENTS=()
+          CLUSTER_COUNT=$(yq e '.clusters | length' "$MANIFEST")
+
+          for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
+            NAME=$(yq e ".clusters[$i].name" "$MANIFEST")
+            PATTERN=$(yq e ".clusters[$i].pattern" "$MANIFEST")
+            ENVIRONMENT=$(yq e ".clusters[$i].environment // \"\"" "$MANIFEST")
+
+            # Same match as the action, so both agree on which cluster owns a file.
+            if ! grep -q "$PATTERN" <<< "$FILES"; then
+              continue
+            fi
+
+            if [[ -z "$ENVIRONMENT" ]]; then
+              echo "::error::Cluster '$NAME' matches this run but declares no 'environment' in $MANIFEST. This workflow deploys each cluster from the GitHub environment that holds its kubeconfig, so the field is required"
+              exit 1
+            fi
+
+            echo "Cluster '$NAME' (pattern '$PATTERN') -> environment '$ENVIRONMENT'"
+            ENVIRONMENTS+=("$ENVIRONMENT")
+          done
+
+          ENVIRONMENTS_JSON=$(printf '%s\n' "${ENVIRONMENTS[@]+"${ENVIRONMENTS[@]}"}" \
+            | jq -Rcs 'split("\n") | map(select(. != "")) | unique')
+
+          # One release file belongs to one cluster. Two would need two kubeconfigs
+          # in the same job, which is what deploys a release to the wrong cluster.
+          if [[ -n "$RELEASE" && "$(jq -r 'length' <<< "$ENVIRONMENTS_JSON")" -gt 1 ]]; then
+            echo "::error::Release '$RELEASE' matches the pattern of more than one cluster ($ENVIRONMENTS_JSON). Make the patterns of $MANIFEST exclusive"
+            exit 1
+          fi
+
+          echo "environments=$ENVIRONMENTS_JSON" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # One job per environment: its own kubeconfig, its own secrets, its own
+  # approval. A failure in one environment leaves the others alone.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.environments != '' && needs.plan.outputs.environments != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(needs.plan.outputs.environments) }}
+    environment: ${{ matrix.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Install kubectl
+        if: inputs.secret-name != '' && !inputs.uninstall
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+
+      - name: Create Kubernetes secret
+        if: inputs.secret-name != '' && !inputs.uninstall
+        env:
+          SECRET_NAME: ${{ inputs.secret-name }}
+          SECRET_NAMESPACE: ${{ inputs.secret-namespace }}
+          SECRET_KEYS: ${{ inputs.secret-keys }}
+          ENVIRONMENT: ${{ matrix.environment }}
+          # The values stay in the environment and never reach the script text:
+          # they are multi-line and secret.
+          KUBECONFIG_CONTENT: ${{ fromJSON(toJSON(secrets))[inputs.kubeconfig-secret] }}
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+          VARS_JSON: ${{ toJSON(vars) }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$SECRET_NAMESPACE" ]]; then
+            echo "::error::'secret-name' is set, so 'secret-namespace' is required"
+            exit 1
+          fi
+          if [[ -z "$SECRET_KEYS" ]]; then
+            echo "::error::'secret-name' is set, so 'secret-keys' is required"
+            exit 1
+          fi
+          if [[ -z "$KUBECONFIG_CONTENT" ]]; then
+            echo "::error::Secret '${{ inputs.kubeconfig-secret }}' is empty or not set in environment '$ENVIRONMENT'"
+            exit 1
+          fi
+
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_CONTENT" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+          # The namespace may not exist yet on a first deployment: helm creates it,
+          # but only after this step.
+          kubectl create namespace "$SECRET_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          # The keys the Secret holds now. --ignore-not-found gives an empty list
+          # for a Secret that does not exist yet.
+          EXISTING_KEYS=$(kubectl get secret "$SECRET_NAME" --namespace "$SECRET_NAMESPACE" \
+            --ignore-not-found -o json | jq -r '.data // {} | keys[]')
+
+          ARGS=()
+
+          while read -r LINE; do
+            LINE="${LINE%%$'\r'}"
+            [[ -z "$LINE" || "$LINE" == \#* ]] && continue
+
+            # `vars:NAME` reads the value from `vars`, anything else from `secrets`.
+            SPEC="$LINE"
+            SOURCE_JSON="$SECRETS_JSON"
+            SOURCE_NAME="secrets"
+            if [[ "$SPEC" == vars:* ]]; then
+              SPEC="${SPEC#vars:}"
+              SOURCE_JSON="$VARS_JSON"
+              SOURCE_NAME="vars"
+            fi
+
+            NAME="${SPEC%%=*}"
+            KEY="${SPEC#*=}"
+            [[ "$KEY" == "$SPEC" ]] && KEY="$NAME"
+            KEY="${KEY#@}"
+
+            VALUE=$(jq -r --arg k "$NAME" '.[$k] // empty' <<< "$SOURCE_JSON")
+
+            # An empty value is never written as a key: it would start the service
+            # with an empty password or wallet key.
+            if [[ -z "$VALUE" ]]; then
+              if grep -qxF "$KEY" <<< "$EXISTING_KEYS"; then
+                echo "::error::$SOURCE_NAME.$NAME is not set in environment '$ENVIRONMENT', but $SECRET_NAMESPACE/$SECRET_NAME holds key '$KEY'. The apply would remove it. Set the value, or remove the key from the Secret on purpose"
+                exit 1
+              fi
+              echo "::warning::$SOURCE_NAME.$NAME is not set in environment '$ENVIRONMENT', so $SECRET_NAMESPACE/$SECRET_NAME does not get key '$KEY'"
+              continue
+            fi
+
+            # Written to a file and passed as --from-file: a value given on the
+            # command line would show up in the process list of the runner.
+            VALUE_FILE="$RUNNER_TEMP/secret-value-$KEY"
+            printf '%s' "$VALUE" > "$VALUE_FILE"
+            ARGS+=(--from-file="$KEY=$VALUE_FILE")
+            echo "Key '$KEY' <- $SOURCE_NAME.$NAME"
+          done <<< "$SECRET_KEYS"
+
+          if [[ ${#ARGS[@]} -eq 0 ]]; then
+            echo "::error::None of the names of 'secret-keys' has a value in environment '$ENVIRONMENT'"
+            exit 1
+          fi
+
+          kubectl create secret generic "$SECRET_NAME" \
+            --namespace "$SECRET_NAMESPACE" \
+            "${ARGS[@]}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Export chart secrets
+        if: inputs.chart-secrets != ''
+        env:
+          CHART_SECRETS: ${{ inputs.chart-secrets }}
+          ENVIRONMENT: ${{ matrix.environment }}
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: |
+          set -euo pipefail
+
+          # The action reads each `chartSecrets` name from the environment, and the
+          # name of an `env:` key cannot be an expression, so the names go through
+          # GITHUB_ENV instead.
+          while read -r NAME; do
+            NAME="${NAME%%$'\r'}"
+            [[ -z "$NAME" || "$NAME" == \#* ]] && continue
+
+            VALUE=$(jq -r --arg k "$NAME" '.[$k] // empty' <<< "$SECRETS_JSON")
+            if [[ -z "$VALUE" ]]; then
+              echo "::error::Chart secret '$NAME' is not set in environment '$ENVIRONMENT'"
+              exit 1
+            fi
+
+            DELIMITER="GHEOF_${RANDOM}${RANDOM}"
+            {
+              echo "${NAME}<<${DELIMITER}"
+              printf '%s\n' "$VALUE"
+              echo "${DELIMITER}"
+            } >> "$GITHUB_ENV"
+            echo "Exported chart secret '$NAME'"
+          done <<< "$CHART_SECRETS"
+
+      - name: Helm deploy
+        uses: 2060-io/organization/actions/helm-deploy@v0.5.2
+        with:
+          directory: ${{ inputs.directory }}
+          manifest: ${{ inputs.manifest }}
+          # The cluster of this job and no other.
+          environment: ${{ matrix.environment }}
+          release: ${{ inputs.release }}
+          uninstall: ${{ inputs.uninstall }}
+          dry-run: ${{ inputs.dry-run }}
+          deploy-labels: ${{ inputs.deploy-labels }}
+        env:
+          # The action resolves the kubeconfig by the name that `kubeconfigSecret`
+          # gives in the manifest, so it must arrive under that same name.
+          KUBECONFIG: ${{ fromJSON(toJSON(secrets))[inputs.kubeconfig-secret] }}
