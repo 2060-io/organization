@@ -1,38 +1,5 @@
-# =============================================================================
-# Helm Deploy — reusable workflow
-# =============================================================================
-#
-# Runs the deployment flow that every *-deploy repository copies today: resolve
-# the clusters a change touches, then deploy each one from its own job, with the
-# secrets and the approvals of its own GitHub environment.
-#
-# The caller keeps only what is repository data:
-#
-#   jobs:
-#     cd:
-#       uses: 2060-io/organization/.github/workflows/helm-deploy-call.yml@v0.6.0
-#       with:
-#         directory: charts
-#         secret-name: hologram-secrets
-#         secret-namespace: hologram-backend
-#         secret-keys: |
-#           MEDIATOR_WALLET_KEY
-#           FIREBASE_CONFIG=@firebase-config.json
-#       secrets: inherit
-#
-# The cluster manifest (`clusters.yml`) stays the single source of truth: this
-# workflow reads `pattern` to know which clusters a change touches, and
-# `environment` to know which GitHub environment owns each one. No workflow has
-# to repeat that mapping any more.
-#
-# One cluster per job is what keeps a deployment inside its own cluster: the job
-# only ever holds the kubeconfig of the environment it deploys to, and it passes
-# `environment` to the action so the action deploys that cluster alone.
-#
-# `secrets: inherit` is required: this workflow reads the kubeconfig, the keys of
-# `secret-keys` and the names of `chart-secrets` from the caller's secrets.
-#
-# =============================================================================
+# Deploys the Helm charts that a change touches, one job per cluster, each from the
+# GitHub environment that holds its kubeconfig. Usage: see ./README.md
 
 name: Helm Deploy
 
