@@ -1,19 +1,12 @@
 name: Helm Secret
+# An expression in `description` is parsed when the manifest loads, where `matrix` and
+# `secrets` do not exist, so the example of the call lives in README.md.
 description: |
   Creates or updates the Kubernetes Secret the charts of a cluster read, and exports
   the chart secrets its values files reference, both from the secrets of the GitHub
   environment of the calling job. Run it from a job that declares `environment:`, and
-  hand the values over in the environment of the step, never in `with:`:
-
-    - uses: 2060-io/organization/actions/helm-secret@main
-      with:
-        environment: ${{ matrix.environment }}
-        secret-name: hologram-secrets
-        secret-keys: MEDIATOR_WALLET_KEY
-      env:
-        KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
-        SECRETS_JSON: ${{ toJSON(secrets) }}
-        VARS_JSON: ${{ toJSON(vars) }}
+  hand the values over in the environment of the step, never in `with:`. The README of
+  this action shows the shape of the call.
 
   `SECRETS_JSON` and `VARS_JSON` are how a name of `secret-keys` becomes a value: the
   name of an `env:` key cannot be an expression, so the values arrive as one object
