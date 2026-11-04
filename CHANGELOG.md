@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/2060-io/organization/compare/v0.5.2...v0.6.0) (2026-11-04)
+
+
+### Features
+
+* helm deploy across org ([#65](https://github.com/2060-io/organization/issues/65)) ([92e4863](https://github.com/2060-io/organization/commit/92e4863951451e6e1eed78d73fce791e5d0458d1))
+
+
+### Bug Fixes
+
+* **helm-deploy:** multi environment problem ([#63](https://github.com/2060-io/organization/issues/63)) ([10a9d83](https://github.com/2060-io/organization/commit/10a9d83d420c87bd571ab617922a5b899e71005c))
+
 ## [0.5.2](https://github.com/2060-io/organization/compare/v0.5.1...v0.5.2) (2026-08-05)
 
 
