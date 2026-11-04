@@ -1,0 +1,142 @@
+name: Helm Plan
+description: |
+  Resolves which GitHub environments a change deploys to, as a job matrix. Reads the
+  cluster manifest and the diff of the push, so it needs no secrets. Run it from a job
+  that checked the repository out with `fetch-depth: 0`.
+inputs:
+  directory:
+    description: "Base directory holding the values files (e.g. charts)"
+    required: true
+  manifest:
+    description: "Cluster manifest defining name, pattern and environment per cluster"
+    required: false
+    default: clusters.yml
+  release:
+    description: |
+      A single release as the path of its values file without the extension
+      (e.g. `dev/hologram-server-chart`). Skips change detection.
+    required: false
+    default: ""
+outputs:
+  matrix:
+    description: |
+      `[{"environment": "...", "namespace": "..."}, ...]`, one entry per cluster this
+      run touches, or `[]` when it touches none. `namespace` is the `chartNamespace`
+      the values files of the cluster declare, empty when they disagree.
+    value: ${{ steps.plan.outputs.matrix }}
+runs:
+  using: composite
+  steps:
+    # Same version and checksum as actions/helm-deploy.
+    - name: Install yq
+      shell: bash
+      env:
+        YQ_VERSION: v4.6.0
+        YQ_SHA256: 3cd45de096cc3c5fcff3ba4b3fbc10cd2ad606c670b626b51f60ca66b7ddcd9a
+      run: |
+        set -euo pipefail
+        curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq
+        echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum -c -
+        chmod +x /usr/local/bin/yq
+
+    - name: Resolve target environments
+      id: plan
+      shell: bash
+      env:
+        DIRECTORY: ${{ inputs.directory }}
+        MANIFEST: ${{ inputs.manifest }}
+        RELEASE: ${{ inputs.release }}
+        BEFORE: ${{ github.event.before }}
+        AFTER: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        if [[ ! -f "$MANIFEST" ]]; then
+          echo "::error::Manifest file '$MANIFEST' not found"
+          exit 1
+        fi
+
+        if [[ -n "$RELEASE" ]]; then
+          # The path of the release carries its cluster.
+          FILES=""
+          for EXT in yml yaml; do
+            if [[ -f "$DIRECTORY/$RELEASE.$EXT" ]]; then
+              FILES="$DIRECTORY/$RELEASE.$EXT"
+            fi
+          done
+          if [[ -z "$FILES" ]]; then
+            echo "::error::No values file at $DIRECTORY/$RELEASE.yml or .yaml"
+            exit 1
+          fi
+        else
+          # All zeros on a branch's first push, a dropped commit after a force push.
+          # The deploy action diffs this same range with no guard of its own, so
+          # recovering the range here would only buy a green job that deploys nothing.
+          if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "::error::Cannot diff against '$BEFORE': the branch's first push, or a force push dropped it. Deploy each release with the 'release' input instead"
+            exit 1
+          fi
+
+          FILES=$(git diff --name-only "$BEFORE" "$AFTER" | { grep -E "^${DIRECTORY}/.*\.(yml|yaml)$" || true; })
+        fi
+
+        if [[ -z "$FILES" ]]; then
+          echo "No values file of $DIRECTORY changed, nothing to deploy"
+          echo "matrix=[]" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "Values files in this run:"
+        echo "$FILES"
+
+        ENTRIES=()
+        CLUSTER_COUNT=$(yq e '.clusters | length' "$MANIFEST")
+
+        for i in $(seq 0 $((CLUSTER_COUNT - 1))); do
+          NAME=$(yq e ".clusters[$i].name" "$MANIFEST")
+          PATTERN=$(yq e ".clusters[$i].pattern" "$MANIFEST")
+          ENVIRONMENT=$(yq e ".clusters[$i].environment // \"\"" "$MANIFEST")
+
+          # Same match as the deploy action, so both agree on who owns a file.
+          MATCHED=$(grep "$PATTERN" <<< "$FILES" || true)
+          if [[ -z "$MATCHED" ]]; then
+            continue
+          fi
+
+          if [[ -z "$ENVIRONMENT" ]]; then
+            echo "::error::Cluster '$NAME' matches this run but declares no 'environment' in $MANIFEST. Each cluster deploys from the GitHub environment that holds its kubeconfig, so the field is required"
+            exit 1
+          fi
+
+          # The namespace the charts of this cluster declare. Empty if they disagree.
+          NAMESPACES=$(while read -r VALUES_FILE; do
+            # An `if`, not `&&`: with pipefail a failing last command kills the pipe.
+            if [[ -f "$VALUES_FILE" ]]; then
+              yq e '.chartNamespace // ""' "$VALUES_FILE"
+            fi
+          done <<< "$MATCHED" | sed '/^$/d' | sort -u)
+
+          NAMESPACE=""
+          if [[ "$(grep -c . <<< "$NAMESPACES" || true)" -eq 1 ]]; then
+            NAMESPACE="$NAMESPACES"
+          fi
+
+          echo "Cluster '$NAME' (pattern '$PATTERN') -> environment '$ENVIRONMENT', namespace '${NAMESPACE:-<unresolved>}'"
+          ENTRIES+=("$(jq -nc --arg e "$ENVIRONMENT" --arg n "$NAMESPACE" '{environment: $e, namespace: $n}')")
+        done
+
+        if [[ ${#ENTRIES[@]} -eq 0 ]]; then
+          echo "No cluster of $MANIFEST matches the values files of this run"
+          echo "matrix=[]" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        MATRIX_JSON=$(printf '%s\n' "${ENTRIES[@]}" | jq -cs 'unique_by(.environment)')
+
+        # Two clusters would need two kubeconfigs in one job.
+        if [[ -n "$RELEASE" && "$(jq -r 'length' <<< "$MATRIX_JSON")" -gt 1 ]]; then
+          echo "::error::Release '$RELEASE' matches the pattern of more than one cluster ($MATRIX_JSON). Make the patterns of $MANIFEST exclusive"
+          exit 1
+        fi
+
+        echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"

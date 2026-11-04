@@ -1,0 +1,201 @@
+name: Helm Secret
+# An expression in `description` is parsed when the manifest loads, where `matrix` and
+# `secrets` do not exist, so the example of the call lives in README.md.
+description: |
+  Creates or updates the Kubernetes Secret the charts of a cluster read, and exports
+  the chart secrets its values files reference, both from the secrets of the GitHub
+  environment of the calling job. Run it from a job that declares `environment:`, and
+  hand the values over in the environment of the step, never in `with:`. The README of
+  this action shows the shape of the call.
+
+  `SECRETS_JSON` and `VARS_JSON` are how a name of `secret-keys` becomes a value: the
+  name of an `env:` key cannot be an expression, so the values arrive as one object
+  and the action looks each name up in it.
+inputs:
+  environment:
+    description: "GitHub environment the job runs from, for the messages"
+    required: true
+  secret-name:
+    description: "Kubernetes Secret to create or update. Empty skips that part"
+    required: false
+    default: ""
+  secret-namespace:
+    description: "Namespace of `secret-name`"
+    required: false
+    default: ""
+  secret-keys:
+    description: |
+      Keys of `secret-name`, one per line:
+
+        MEDIATOR_WALLET_KEY              key MEDIATOR_WALLET_KEY
+        OPENAI_API_KEY=openai-key        key openai-key
+        FIREBASE_CONFIG=@firebase.json   key firebase.json, written as a file
+        vars:GH_AGENT_CRED_DEF_ID        value read from `VARS_JSON`, not `SECRETS_JSON`
+
+      CAUTION: `kubectl apply` removes every key this apply does not write. An empty
+      value stops the run when the Secret already holds the key.
+    required: false
+    default: ""
+  chart-secrets:
+    description: |
+      Secrets the values files reference under `chartSecrets`, one per line, exported
+      to the environment the deploy action reads them from.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    # Every path of this action reads SECRETS_JSON, so an object that holds nothing but
+    # the token is a wiring mistake, and the message of each missing name would blame
+    # the environment for it.
+    - name: Check the secrets context
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        set -euo pipefail
+
+        SECRETS_JSON="${SECRETS_JSON:-}"
+        if [[ -z "$SECRETS_JSON" ]]; then
+          SECRETS_JSON='{}'
+        fi
+
+        OWN_KEYS=$(jq -r 'keys[]' <<< "$SECRETS_JSON" 2>/dev/null | { grep -vx github_token || true; } || true)
+
+        if [[ -z "$OWN_KEYS" ]]; then
+          echo "::error::No secret of environment '$ENVIRONMENT' reached this job: the 'secrets' context holds nothing but 'github_token'. Either the calling step passes no SECRETS_JSON in its env, or the job runs from a reusable workflow of another organization, where 'secrets: inherit' passes nothing. Run the job in the repository that owns the environment and call this action from it"
+          exit 1
+        fi
+
+    - name: Install kubectl
+      if: inputs.secret-name != ''
+      uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+
+    - name: Create Kubernetes secret
+      if: inputs.secret-name != ''
+      shell: bash
+      env:
+        SECRET_NAME: ${{ inputs.secret-name }}
+        SECRET_NAMESPACE: ${{ inputs.secret-namespace }}
+        SECRET_KEYS: ${{ inputs.secret-keys }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        set -euo pipefail
+
+        # Secret and multi-line: they come from the environment of the calling step, so
+        # they never reach the text of this script.
+        KUBECONFIG_CONTENT="${KUBECONFIG_CONTENT:-}"
+        SECRETS_JSON="${SECRETS_JSON:-}"
+        VARS_JSON="${VARS_JSON:-}"
+        if [[ -z "$VARS_JSON" ]]; then
+          VARS_JSON='{}'
+        fi
+
+        if [[ -z "$SECRET_NAMESPACE" ]]; then
+          echo "::error::'secret-name' is set, so 'secret-namespace' is required. The helm-plan action leaves the namespace of a cluster empty when its values files declare no single 'chartNamespace', and then the namespace has to be named here"
+          exit 1
+        fi
+        if [[ -z "$SECRET_KEYS" ]]; then
+          echo "::error::'secret-name' is set, so 'secret-keys' is required"
+          exit 1
+        fi
+        if [[ -z "$KUBECONFIG_CONTENT" ]]; then
+          echo "::error::The kubeconfig of environment '$ENVIRONMENT' is empty or not set. The calling step passes it as 'KUBECONFIG_CONTENT' in its env"
+          exit 1
+        fi
+
+        mkdir -p ~/.kube
+        printf '%s' "$KUBECONFIG_CONTENT" > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+        # On a first deployment helm creates it, but only after this step.
+        kubectl create namespace "$SECRET_NAMESPACE" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+        # The keys the Secret holds now; empty when it does not exist yet.
+        EXISTING_KEYS=$(kubectl get secret "$SECRET_NAME" --namespace "$SECRET_NAMESPACE" \
+          --ignore-not-found -o json | jq -r '.data // {} | keys[]')
+
+        ARGS=()
+
+        while read -r LINE; do
+          LINE="${LINE%%$'\r'}"
+          [[ -z "$LINE" || "$LINE" == \#* ]] && continue
+
+          # `vars:NAME` reads from VARS_JSON, anything else from SECRETS_JSON.
+          SPEC="$LINE"
+          SOURCE_JSON="$SECRETS_JSON"
+          SOURCE_NAME="secrets"
+          if [[ "$SPEC" == vars:* ]]; then
+            SPEC="${SPEC#vars:}"
+            SOURCE_JSON="$VARS_JSON"
+            SOURCE_NAME="vars"
+          fi
+
+          NAME="${SPEC%%=*}"
+          KEY="${SPEC#*=}"
+          [[ "$KEY" == "$SPEC" ]] && KEY="$NAME"
+          KEY="${KEY#@}"
+
+          VALUE=$(jq -r --arg k "$NAME" '.[$k] // empty' <<< "$SOURCE_JSON")
+
+          # An empty key would start the service with an empty password.
+          if [[ -z "$VALUE" ]]; then
+            if grep -qxF "$KEY" <<< "$EXISTING_KEYS"; then
+              echo "::error::$SOURCE_NAME.$NAME is not set in environment '$ENVIRONMENT', but $SECRET_NAMESPACE/$SECRET_NAME holds key '$KEY'. The apply would remove it. Set the value, or remove the key from the Secret on purpose"
+              exit 1
+            fi
+            echo "::warning::$SOURCE_NAME.$NAME is not set in environment '$ENVIRONMENT', so $SECRET_NAMESPACE/$SECRET_NAME does not get key '$KEY'"
+            continue
+          fi
+
+          # --from-file, not the command line: it would show in the process list.
+          VALUE_FILE="$RUNNER_TEMP/secret-value-$KEY"
+          printf '%s' "$VALUE" > "$VALUE_FILE"
+          ARGS+=(--from-file="$KEY=$VALUE_FILE")
+          echo "Key '$KEY' <- $SOURCE_NAME.$NAME"
+        done <<< "$SECRET_KEYS"
+
+        if [[ ${#ARGS[@]} -eq 0 ]]; then
+          echo "::error::None of the names of 'secret-keys' has a value in environment '$ENVIRONMENT'"
+          exit 1
+        fi
+
+        kubectl create secret generic "$SECRET_NAME" \
+          --namespace "$SECRET_NAMESPACE" \
+          "${ARGS[@]}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Export chart secrets
+      if: inputs.chart-secrets != ''
+      shell: bash
+      env:
+        CHART_SECRETS: ${{ inputs.chart-secrets }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        set -euo pipefail
+
+        SECRETS_JSON="${SECRETS_JSON:-}"
+
+        # The name of an `env:` key cannot be an expression, so GITHUB_ENV it is.
+        while read -r NAME; do
+          NAME="${NAME%%$'\r'}"
+          [[ -z "$NAME" || "$NAME" == \#* ]] && continue
+
+          VALUE=$(jq -r --arg k "$NAME" '.[$k] // empty' <<< "$SECRETS_JSON")
+
+          # Only the charts of this run know which of these they need, and the deploy
+          # action fails on the ones it cannot resolve.
+          if [[ -z "$VALUE" ]]; then
+            echo "::warning::Chart secret '$NAME' is not set in environment '$ENVIRONMENT'"
+            continue
+          fi
+
+          DELIMITER="GHEOF_${RANDOM}${RANDOM}"
+          {
+            echo "${NAME}<<${DELIMITER}"
+            printf '%s\n' "$VALUE"
+            echo "${DELIMITER}"
+          } >> "$GITHUB_ENV"
+          echo "Exported chart secret '$NAME'"
+        done <<< "$CHART_SECRETS"
